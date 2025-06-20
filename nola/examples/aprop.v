@@ -1,4 +1,5 @@
 From nola.iris Require Import cif inv sinv.
+From nola.bi Require Import deriv.
 From nola.util Require Import tagged.
 From iris.base_logic.lib Require Export wsat invariants.
 From iris.proofmode Require Import proofmode.
@@ -125,18 +126,41 @@ Arguments aProp _ _ _ {_ _}.
 
 Section inv.
 
-  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ),
+  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ), !iffJ (cifO CON Σ) JUDG,
+            !Dsem JUDG (cifO CON Σ) (iProp Σ),
             !invGS_gen hlc Σ,
-            !inv'GS (cifOF CON) Σ, !inv_tokC CON, !inv_tokCS CON JUDG Σ}.
+            !iffJS (cifO CON Σ) JUDG Σ,
+            !inv'GS (cifOF CON) Σ, !invC CON, !invCS CON JUDG Σ}.
 
   Set Printing Coercions.
 
   Program Definition ainv_tok {b} N (P : aProp CON JUDG Σ b) : aProp CON JUDG Σ false :=
-    FProp (inv_tok N P) (cif_inv_tok N P) _.
+    FProp ( inv' der N P) (cif_inv N P) _.
   Next Obligation.
     unfold aProp_to_ofe_car, aProp_to_FML; simpl.
     rewrite sem_cif_in; simpl. reflexivity.
   Defined.
+
+  (** Allocate [inv_tok] suspending the world satisfaction *)
+  Lemma inv'_tok_alloc_suspend {sm} Px N :
+    inv_wsat sm ==∗ invd N Px ∗ (sm Px -∗ inv_wsat sm).
+  Proof.
+    rewrite /inv' inv.inv_wsat_unseal. iIntros "W".
+    iDestruct (sinv_tok_alloc_suspend Px with "W") as (I) "big".
+    iMod (alloc_ownD I N) as (???) "D". iMod ("big" with "[//]") as "[#i →W]".
+    iModIntro. iSplitR.
+    { iExists Px. rewrite inv.inv_tok_unseal. iFrame "i %".
+      iApply Deriv_factor; iIntros.
+      rewrite in_js. cbn. unfold iffJT_sem. iModIntro.
+      iSplit; by iIntros. }
+    iIntros "HP". iApply "→W". unfold inv.inv_sem. iLeft. iFrame.
+  Qed.
+  (** Allocate [inv_tok] *)
+  Lemma inv'_tok_alloc {sm} Px N : sm Px =[inv_wsat sm]=∗ invd N Px.
+  Proof.
+    iIntros "? W". iMod (inv'_tok_alloc_suspend with "W") as "[$ →W]". iModIntro.
+    by iApply "→W".
+  Qed.
 
   Definition invariant_unfold {b} (P : aProp CON JUDG Σ b) := IProp_to_FProp P.
 
@@ -144,10 +168,14 @@ Section inv.
     P -∗ bupdw (inv_wsat ⟦⟧ᶜ) (ainv_tok N P).
   Proof.
     iIntros "HP W".
-    iApply (inv.inv_tok_alloc with "[HP] W").
-    dependent destruction P; simpl.
-    - by iNext.
-    - by rewrite e.
+    unfold ainv_tok. simpl.
+    iMod (inv'_tok_alloc with "[HP] W") as "[W Hinv]".
+    { instantiate (1 := P).
+      dependent destruction P.
+      - iApply "HP".
+      - by rewrite e. }
+    iFrame "W".
+    iApply "Hinv".
   Qed.
 
   Lemma ainv_tok_inv_alloc {b} N1 N2 (P : aProp CON JUDG Σ b) : N1 ## N2 ->
@@ -165,25 +193,29 @@ Section inv.
       (invariant_unfold Px) ∗ (invariant_unfold Px =[inv_wsat ⟦⟧ᶜ]{E∖↑N,E}=∗ True).
   Proof.
     simpl.
-    rewrite inv.inv_tok_unseal inv.inv_wsat_unseal=> NE. iIntros "[%i[%iN #sm]] W".
+    rewrite /inv' inv.inv_wsat_unseal => NE. iIntros "[%Q #[HJ sm]] W".
+    rewrite inv.inv_tok_unseal; iDestruct "sm" as "(%i & %iN & sm)".
     iMod (inv.fupd_ownE_acc_in iN NE) as "[i cl]".
     iDestruct (sinv_tok_acc with "sm W") as "[in →W]".
     iDestruct "in" as "[[HP D]|i']"; last first.
     { iDestruct (ownE_singleton_twice with "[$i $i']") as %[]. }
     iDestruct ("→W" with "[$i]") as "$". iIntros "!>".
+    iPoseProof (der_sound with "HJ") as "#HJ'".
+    rewrite in_js. simpl. unfold iffJT_sem. simpl.
+    iDestruct "HJ'" as "#[P→Q Q→P]"; unfold aProp_to_ofe_car.
     iSplitL "HP".
-    { dependent destruction Px; simpl.
-      - iApply "HP".
-      - by rewrite e. }
+    { dependent destruction Px; cbn.
+      - admit.
+      - rewrite <- e. admit. }
     iIntros "Px W".
     iDestruct (sinv_tok_acc with "sm W") as "[[[_ D']|i] →W]".
     { iDestruct (ownD_singleton_twice with "[$D $D']") as %[]. }
     iMod ("cl" with "i") as "_". iModIntro. iSplit; [|done]. iApply "→W".
     iLeft. iFrame.
-    dependent destruction Px; simpl.
-    - iApply "Px".
-    - by rewrite e.
-  Qed.
+    dependent destruction Px; cbn.
+    - admit.
+    - rewrite <- e. admit.
+  Admitted.
 
   Lemma ainv_tok_acc_nola {N E} {Px : aProp CON JUDG Σ false} : ↑N ⊆ E →
     ainv_tok N Px =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N}=∗
@@ -221,5 +253,46 @@ Section inv.
     iMod "Hclose".
     by iFrame.
   Qed.
+
+  Lemma sep_frame_l (P P' Q : iProp Σ) :
+    P ≡ P' ->
+    (P ∗ Q)%I ≡ (P' ∗ Q)%I.
+  Proof.
+    iIntros "%HP". rewrite HP. iSplitL; by iIntros.
+  Qed.
+
+  Lemma sep_exist {A} (Ψ Φ : A -> iProp Σ) :
+    (∀ Qx, Ψ Qx ≡ Φ Qx) ->
+    (∃ Qx, Ψ Qx)%I ≡ (∃ Qx, Φ Qx)%I.
+  Proof.
+    iIntros "%HP".
+    iSplit; iIntros "[%Qx HF]"; iExists Qx; by rewrite HP.
+  Qed.
+
+  Lemma semantic_alteration {b} N (P Q : aProp CON JUDG Σ b) :
+    aProp_to_iProp P ≡ aProp_to_iProp Q ->
+    aProp_to_iProp (ainv_tok N P) ≡ aProp_to_iProp (ainv_tok N Q).
+  Proof.
+    destruct b; dependent destruction P; dependent destruction Q;
+      cbn; intros Hequiv.
+    - f_equiv. f_equiv. apply Hequiv.
+    - unfold inv'.
+      apply sep_exist.
+      intros Qx.
+      apply sep_frame_l with (Q := inv_tok N Qx).
+      iSplit; iIntros "HJ";
+        iPoseProof (der_sound with "HJ") as "HJ";
+        rewrite in_js; cbn; unfold iffJT_sem; iDestruct "HJ" as "#HJ".
+      + iApply Deriv_factor; iIntros.
+        rewrite in_js. cbn. unfold iffJT_sem. iModIntro. simpl.
+        { iSplit; iIntros "HP".
+          iDestruct "HJ" as "[HJ _]". admit.
+          iDestruct "HJ" as "[_ HJ]". admit. }
+      + iApply Deriv_factor; iIntros.
+        rewrite in_js. cbn. unfold iffJT_sem. iModIntro. simpl.
+        { iSplit; iIntros "HP".
+          iDestruct "HJ" as "[HJ _]". admit.
+          iDestruct "HJ" as "[_ HJ]". admit. }
+  Admitted.
 
 End inv.
