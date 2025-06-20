@@ -138,7 +138,9 @@ Section inv.
     rewrite sem_cif_in; simpl. reflexivity.
   Defined.
 
-  Lemma inv_tok_alloc' {b} N (P : aProp CON JUDG Σ b) :
+  Definition invariant_unfold {b} (P : aProp CON JUDG Σ b) := IProp_to_FProp P.
+
+  Lemma ainv_tok_alloc {b} N (P : aProp CON JUDG Σ b) :
     P -∗ bupdw (inv_wsat ⟦⟧ᶜ) (ainv_tok N P).
   Proof.
     iIntros "HP W".
@@ -148,19 +150,19 @@ Section inv.
     - by rewrite e.
   Qed.
 
-  Lemma inv_tok_inv_alloc' {b} N1 N2 (P : aProp CON JUDG Σ b) :
-    (ainv_tok N1 P) -∗ bupdw (inv_wsat ⟦⟧ᶜ) (ainv_tok N2 (ainv_tok N1 P)).
+  Lemma ainv_tok_inv_alloc {b} N1 N2 (P : aProp CON JUDG Σ b) : N1 ## N2 ->
+    P -∗ bupdw (inv_wsat ⟦⟧ᶜ) (ainv_tok N2 (ainv_tok N1 P)).
   Proof.
-    iIntros "HP W".
-    iApply (inv.inv_tok_alloc with "[HP] W").
-    unfold ainv_tok; simpl. unfold aProp_to_ofe_car, aProp_to_FML. simpl.
-    rewrite sem_cif_in; simpl.
-    by iApply "HP".
+    iIntros (Hmasks) "HP W".
+    iMod (ainv_tok_alloc with "HP W") as "[W #Hinv]".
+    iMod (ainv_tok_alloc with "Hinv W") as "[W #Hinvinv]".
+    iModIntro. iFrame.
+    iApply "Hinvinv".
   Qed.
 
-  Lemma inv_tok_acc {N E b} {Px : aProp CON JUDG Σ b} : ↑N ⊆ E →
+  Lemma ainv_tok_acc {N E b} {Px : aProp CON JUDG Σ b} : ↑N ⊆ E →
     ainv_tok N Px =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N}=∗
-      (IProp_to_FProp Px) ∗ ((IProp_to_FProp Px) =[inv_wsat ⟦⟧ᶜ]{E∖↑N,E}=∗ True).
+      (invariant_unfold Px) ∗ (invariant_unfold Px =[inv_wsat ⟦⟧ᶜ]{E∖↑N,E}=∗ True).
   Proof.
     simpl.
     rewrite inv.inv_tok_unseal inv.inv_wsat_unseal=> NE. iIntros "[%i[%iN #sm]] W".
@@ -183,33 +185,33 @@ Section inv.
     - by rewrite e.
   Qed.
 
-  Lemma inv_tok_acc_nola {N E} {Px : aProp CON JUDG Σ false} : ↑N ⊆ E →
+  Lemma ainv_tok_acc_nola {N E} {Px : aProp CON JUDG Σ false} : ↑N ⊆ E →
     ainv_tok N Px =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N}=∗
       Px ∗ (Px =[inv_wsat ⟦⟧ᶜ]{E∖↑N,E}=∗ True).
   Proof.
     iIntros (Hmask) "HP".
-    iPoseProof (inv_tok_acc with "HP") as "Hinv". eassumption.
+    iPoseProof (ainv_tok_acc with "HP") as "Hinv". eassumption.
     dependent destruction Px; simpl. iApply "Hinv".
   Qed.
 
-  Lemma inv_tok_acc_iprop {N E} {Px : aProp CON JUDG Σ true} : ↑N ⊆ E →
+  Lemma ainv_tok_acc_iprop {N E} {Px : aProp CON JUDG Σ true} : ↑N ⊆ E →
     ainv_tok N Px =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N}=∗
       ▷ Px ∗ (▷ Px =[inv_wsat ⟦⟧ᶜ]{E∖↑N,E}=∗ True).
   Proof.
     iIntros (Hmask) "HP".
-    iPoseProof (inv_tok_acc with "HP") as "Hinv". eassumption.
+    iPoseProof (ainv_tok_acc with "HP") as "Hinv". eassumption.
     dependent destruction Px; simpl. iApply "Hinv".
   Qed.
 
-  Lemma inv_tok_acc_2 {N1 N2 E} {P : aProp CON JUDG Σ false} : N1 ## N2 -> ↑N2 ⊆ E -> ↑N1 ⊆ E →
+  Lemma ainv_tok_acc_2 {N1 N2 E} {P : aProp CON JUDG Σ false} : N1 ## N2 -> ↑N2 ⊆ E -> ↑N1 ⊆ E →
     ainv_tok N2 (ainv_tok N1 P) =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N2∖↑N1}=∗
-      P ∗ (P =[inv_wsat ⟦⟧ᶜ]{E∖↑N2∖↑N1,E}=∗ True).
+      invariant_unfold P ∗ (invariant_unfold P =[inv_wsat ⟦⟧ᶜ]{E∖↑N2∖↑N1,E}=∗ True).
   Proof.
     simpl.
     iIntros (Hneq HN2 HN1) "Hinv W".
-    iPoseProof (inv_tok_acc_nola with "Hinv W") as "Hinv". apply HN2.
+    iPoseProof (ainv_tok_acc with "Hinv W") as "Hinv". apply HN2.
     iMod "Hinv" as "(W & #Hinv & Hclose)".
-    iPoseProof (inv_tok_acc_nola with "Hinv W") as "Hinv2". { instantiate (1 := E ∖ ↑N2). apply subseteq_difference_r; assumption. }
+    iPoseProof (ainv_tok_acc with "Hinv W") as "Hinv2". { instantiate (1 := E ∖ ↑N2). apply subseteq_difference_r; assumption. }
     iMod "Hinv2" as "(W & Hinv2 & Hclose2)".
     iModIntro. iFrame.
     iIntros "HP W".
