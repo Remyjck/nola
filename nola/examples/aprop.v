@@ -13,17 +13,15 @@ Section embedding.
 
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
 
-  Context `{!Dsem JUDG (cifO CON Σ) (iProp Σ),
-    !iffJ (cifO CON Σ) JUDG, !iffJS (cifO CON Σ) JUDG Σ}.
-
-  Context `{!Deriv (JUDG:=JUDG) ih δ}.
+  (* Context `{!Dsem JUDG (cifO CON Σ) (iProp Σ),
+    !iffJ (cifO CON Σ) JUDG, !iffJS (cifO CON Σ) JUDG Σ}. *)
 
   Inductive aProp : bool -> Type :=
   | IProp :
     ∀ (P : iProp Σ), aProp true
   | FProp :
     ∀ (P : iProp Σ) (P_cif : cif CON Σ),
-      ⟦ P_cif ⟧ᶜ(δ) ≡ P ->
+      ⟦ P_cif ⟧ᶜ ≡ P ->
       aProp false.
 
   Definition nola_prop := aProp false.
@@ -76,7 +74,7 @@ Section embedding.
   Coercion aProp_to_ofe_car_func {b} (P : aProp b) : ofe_car_ofunc
     := aProp_to_FML P.
 
-  Lemma sm_to_FML (P : aProp false) : ⟦ P ⟧ᶜ(δ) ≡ (aProp_to_iProp P).
+  Lemma sm_to_FML (P : aProp false) : ⟦ P ⟧ᶜ ≡ (aProp_to_iProp P).
   Proof. by dependent destruction P. Qed.
 
 
@@ -127,26 +125,22 @@ Section embedding.
 
 End embedding.
 
-Arguments aProp _ _ _ {_} _.
+Arguments aProp _ _ _ {_ _}.
 
-From nola.examples Require Import con.
+From nola.examples Require Import con deriv.
 
 Section inv.
 
-  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ), !iffJ (cifO CON Σ) JUDG,
-            !Dsem JUDG (cifO CON Σ) (iProp Σ),
-            !invGS_gen hlc Σ,
-            !iffJS (cifO CON Σ) JUDG Σ,
-            !inv'GS (cifOF CON) Σ, !invC CON, !invJ (cifO CON Σ) JUDG, !invCS CON JUDG Σ}.
+  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ), !lrustGS_gen hlc Σ,
+    !inv'GS (cifOF CON) Σ, !invC CON, !iffJ (cifO CON Σ) JUDG,
+    !invCS CON JUDG Σ, !iffJS (cifOF CON) JUDG Σ}.
 
   Set Printing Coercions.
 
-  Context `{!Deriv (JUDG:=JUDG) ih δ}.
-
-  Local Notation "'aProp'" := (aProp CON JUDG Σ δ).
+  Local Notation "'aProp'" := (aProp CON JUDG Σ).
 
   Program Definition ainv_tok {b} N (P : aProp b) : aProp false :=
-    FProp (inv' δ N P) (cif_inv N P) _.
+    FProp (invd N P) (cif_inv N P) _.
   Next Obligation.
     unfold aProp_to_ofe_car, aProp_to_FML; simpl.
     setoid_rewrite sem_cif_in; simpl. reflexivity.
@@ -154,7 +148,7 @@ Section inv.
 
   (** Allocate [inv_tok] suspending the world satisfaction *)
   Lemma inv'_tok_alloc_suspend {sm} Px N :
-    inv_wsat sm ==∗ inv' δ N Px ∗ (sm Px -∗ inv_wsat sm).
+    inv_wsat sm ==∗ invd N Px ∗ (sm Px -∗ inv_wsat sm).
   Proof.
     rewrite /inv' inv.inv_wsat_unseal. iIntros "W".
     iDestruct (sinv_tok_alloc_suspend Px with "W") as (I) "big".
@@ -167,7 +161,7 @@ Section inv.
     iIntros "HP". iApply "→W". unfold inv.inv_sem. iLeft. iFrame.
   Qed.
   (** Allocate [inv_tok] *)
-  Lemma inv'_tok_alloc {sm} Px N : sm Px =[inv_wsat sm]=∗ inv' δ N Px.
+  Lemma inv'_tok_alloc {sm} Px N : sm Px =[inv_wsat sm]=∗ invd N Px.
   Proof.
     iIntros "? W". iMod (inv'_tok_alloc_suspend with "W") as "[$ →W]". iModIntro.
     by iApply "→W".
@@ -176,21 +170,22 @@ Section inv.
   Definition invariant_unfold {b} (P : aProp b) := IProp_to_FProp P.
 
   Lemma ainv_tok_alloc {b} N (P : aProp b) :
-    P -∗ bupdw (inv_wsat ⟦⟧ᶜ(δ)) (ainv_tok N P).
+    P -∗ bupdw (inv_wsat ⟦⟧ᶜ) (ainv_tok N P).
   Proof.
     iIntros "HP W".
     unfold ainv_tok. simpl.
-    iMod (inv'_tok_alloc with "[HP] W") as "[W Hinv]".
+    iMod ( @inv'_alloc CON JUDG Σ Csem0 Jsem0 hlc _ _ _ _ _ _ der_Deriv with "[HP] W") as "[W Hinv]".
     { instantiate (1 := P).
       dependent destruction P; cbn.
       - iApply "HP".
       - by rewrite e. }
     iFrame "W".
     iApply "Hinv".
+    Unshelve.
   Qed.
 
   Lemma ainv_tok_inv_alloc {b} N1 N2 (P : aProp b) : N1 ## N2 ->
-    P -∗ bupdw (inv_wsat ⟦⟧ᶜ(δ)) (ainv_tok N2 (ainv_tok N1 P)).
+    P -∗ bupdw (inv_wsat ⟦⟧ᶜ) (ainv_tok N2 (ainv_tok N1 P)).
   Proof.
     iIntros (Hmasks) "HP W".
     iMod (ainv_tok_alloc with "HP W") as "[W #Hinv]".
@@ -200,11 +195,12 @@ Section inv.
   Qed.
 
   Lemma ainv_tok_acc {N E b} {Px : aProp b} : ↑N ⊆ E →
-    ainv_tok N Px =[inv_wsat ⟦⟧ᶜ(δ)]{E,E∖↑N}=∗
-      (invariant_unfold Px) ∗ (invariant_unfold Px =[inv_wsat ⟦⟧ᶜ(δ)]{E∖↑N,E}=∗ True).
+    ainv_tok N Px =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N}=∗
+      (invariant_unfold Px) ∗ (invariant_unfold Px =[inv_wsat ⟦⟧ᶜ]{E∖↑N,E}=∗ True).
   Proof.
     simpl.
     rewrite /inv' inv.inv_wsat_unseal => NE. iIntros "[%Q #[HJ sm]] W".
+    iDestruct (der_sound with "HJ") as "{HJ}HJ"; rewrite in_js /= /iffJT_sem.
     rewrite inv.inv_tok_unseal; iDestruct "sm" as "(%i & %iN & sm)".
     iMod (inv.fupd_ownE_acc_in iN NE) as "[i cl]".
     iDestruct (sinv_tok_acc with "sm W") as "[in →W]".
@@ -212,23 +208,22 @@ Section inv.
     { iDestruct (ownE_singleton_twice with "[$i $i']") as %[]. }
     iDestruct ("→W" with "[$i]") as "$". iIntros "!>".
     iSplitL "HP".
-    { admit. }
-      (* dependent destruction Px; cbn.
-      - iApply "Q→P".
-      - rewrite <- e. admit. } *)
+    { dependent destruction Px; cbn.
+      - by iApply "HJ".
+      - rewrite <- e. by iApply "HJ". }
     iIntros "Px W".
     iDestruct (sinv_tok_acc with "sm W") as "[[[_ D']|i] →W]".
     { iDestruct (ownD_singleton_twice with "[$D $D']") as %[]. }
     iMod ("cl" with "i") as "_". iModIntro. iSplit; [|done]. iApply "→W".
     iLeft. iFrame.
-    (* dependent destruction Px; cbn.
-    - admit.
-    - rewrite <- e. admit. *)
-  Admitted.
+    dependent destruction Px; cbn.
+    - iApply ("HJ" with "Px").
+    - rewrite <- e. iApply ("HJ" with "Px").
+  Qed.
 
   Lemma ainv_tok_acc_nola {N E} {Px : aProp false} : ↑N ⊆ E →
-    ainv_tok N Px =[inv_wsat ⟦⟧ᶜ(δ)]{E,E∖↑N}=∗
-      Px ∗ (Px =[inv_wsat ⟦⟧ᶜ(δ)]{E∖↑N,E}=∗ True).
+    ainv_tok N Px =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N}=∗
+      Px ∗ (Px =[inv_wsat ⟦⟧ᶜ]{E∖↑N,E}=∗ True).
   Proof.
     iIntros (Hmask) "HP".
     iPoseProof (ainv_tok_acc with "HP") as "Hinv". eassumption.
@@ -236,8 +231,8 @@ Section inv.
   Qed.
 
   Lemma ainv_tok_acc_iprop {N E} {Px : aProp true} : ↑N ⊆ E →
-    ainv_tok N Px =[inv_wsat ⟦⟧ᶜ(δ)]{E,E∖↑N}=∗
-      ▷ Px ∗ (▷ Px =[inv_wsat ⟦⟧ᶜ(δ)]{E∖↑N,E}=∗ True).
+    ainv_tok N Px =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N}=∗
+      ▷ Px ∗ (▷ Px =[inv_wsat ⟦⟧ᶜ]{E∖↑N,E}=∗ True).
   Proof.
     iIntros (Hmask) "HP".
     iPoseProof (ainv_tok_acc with "HP") as "Hinv". eassumption.
@@ -245,8 +240,8 @@ Section inv.
   Qed.
 
   Lemma ainv_tok_acc_2 {N1 N2 E} {P : aProp false} : N1 ## N2 -> ↑N2 ⊆ E -> ↑N1 ⊆ E →
-    ainv_tok N2 (ainv_tok N1 P) =[inv_wsat ⟦⟧ᶜ(δ)]{E,E∖↑N2∖↑N1}=∗
-      invariant_unfold P ∗ (invariant_unfold P =[inv_wsat ⟦⟧ᶜ(δ)]{E∖↑N2∖↑N1,E}=∗ True).
+    ainv_tok N2 (ainv_tok N1 P) =[inv_wsat ⟦⟧ᶜ]{E,E∖↑N2∖↑N1}=∗
+      invariant_unfold P ∗ (invariant_unfold P =[inv_wsat ⟦⟧ᶜ]{E∖↑N2∖↑N1,E}=∗ True).
   Proof.
     simpl.
     iIntros (Hneq HN2 HN1) "Hinv W".
@@ -278,20 +273,34 @@ Section inv.
     iSplit; iIntros "[%Qx HF]"; iExists Qx; by rewrite HP.
   Qed.
 
-  Lemma semantic_alteration {b} N (P Q : aProp b) :
-    aProp_to_iProp P ≡ aProp_to_iProp Q ->
-    aProp_to_iProp (ainv_tok N P) ≡ aProp_to_iProp (ainv_tok N Q).
+  Lemma equiv_bi_wand (P Q : iProp Σ) : P ≡ Q -> P ∗-∗ Q.
+  Proof. intros ->. apply bi.wand_iff_refl. Qed.
+
+  Lemma bi_wand_equiv (P Q : iProp Σ) : P ∗-∗ Q -> P ≡ Q.
+  Proof. intros. by iPoseProof H as "H". Qed.
+
+  Lemma der_sound' `{!inJ (cifO CON Σ) JUDG, !inJS (cifO CON Σ) JUDG (iProp Σ)} : ∀ J : ofe_car (cifO CON Σ), ofe_mor_car _ _ der (in_j J) ⊢ ⟦ J ⟧ᶜ(der).
   Proof.
+    iIntros (J) "Hder". iPoseProof (der_sound with "Hder") as "Hder".
+    erewrite in_js. iApply "Hder".
+  Qed.
+
+  Lemma semantic_alteration {b} N (P Q : aProp b) :
+    □ (⟦ P ⟧ᶜ ∗-∗ ⟦ Q ⟧ᶜ) -∗
+    aProp_to_iProp (ainv_tok N P) -∗ aProp_to_iProp (ainv_tok N Q).
+  Proof.
+    iIntros "#Hequiv".
+    unfold ainv_tok; cbn.
+    iIntros "Hinv".
+    iApply (inv'_iff with "[] Hinv").
+    iIntros "!>" (δ' HDeriv _ Hsound).
     destruct b; dependent destruction P; dependent destruction Q;
-      cbn; intros Hequiv.
-    - f_equiv. f_equiv. apply Hequiv.
-    - unfold inv'.
-      apply sep_exist.
-      intros Qx.
-      apply sep_frame_l with (Q := inv_tok N Qx).
-      iSplit; iIntros "HJ".
-      + admit.
-      + admit.
+      cbn; first done.
+    iSplit; iIntros "HP".
+    - iDestruct "Hequiv" as "[Himp _]".
+      admit.
+    - iDestruct "Hequiv" as "[_ Himp]".
+      admit.
   Admitted.
 
 End inv.
