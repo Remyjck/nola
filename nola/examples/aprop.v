@@ -273,6 +273,16 @@ Section inv.
     iSplit; iIntros "[%Qx HF]"; iExists Qx; by rewrite HP.
   Qed.
 
+  Lemma sep_forall {A} (Ψ Φ : A -> iProp Σ) :
+    (∀ Qx, Ψ Qx ≡ Φ Qx) ->
+    (∀ Qx, Ψ Qx)%I ≡ (∀ Qx, Φ Qx)%I.
+  Proof.
+    iIntros "%HP".
+    iSplit; iIntros "HF %Qx".
+    - rewrite -(HP Qx). iApply "HF".
+    - rewrite (HP Qx). iApply "HF".
+  Qed.
+
   Lemma equiv_bi_wand (P Q : iProp Σ) : P ≡ Q -> P ∗-∗ Q.
   Proof. intros ->. apply bi.wand_iff_refl. Qed.
 
@@ -285,6 +295,18 @@ Section inv.
     erewrite in_js. iApply "Hder".
   Qed.
 
+  Lemma sm_to_FML' δ (P : aProp false) :
+    (∀ J : JUDG, der J ⊢ ⟦ J ⟧(δ)) ->
+    ⟦ aProp_to_FML P ⟧ᶜ(δ) ≡ aProp_to_iProp P.
+  Proof.
+    intros Hδ.
+    dependent destruction P; cbn.
+    rewrite -e.
+    iSplit; iIntros "Hderiv".
+    - admit.
+    - admit.
+  Admitted.
+
   Lemma semantic_alteration {b} N (P Q : aProp b) :
     □ (⟦ P ⟧ᶜ ∗-∗ ⟦ Q ⟧ᶜ) -∗
     aProp_to_iProp (ainv_tok N P) -∗ aProp_to_iProp (ainv_tok N Q).
@@ -294,13 +316,10 @@ Section inv.
     iIntros "Hinv".
     iApply (inv'_iff with "[] Hinv").
     iIntros "!>" (δ' HDeriv _ Hsound).
+    unfold aProp_to_ofe_car.
     destruct b; dependent destruction P; dependent destruction Q;
-      cbn; first done.
-    iSplit; iIntros "HP".
-    - iDestruct "Hequiv" as "[Himp _]".
-      admit.
-    - iDestruct "Hequiv" as "[_ Himp]".
-      admit.
-  Admitted.
+      first done.
+    by rewrite !sm_to_FML !sm_to_FML'.
+  Qed.
 
 End inv.
