@@ -11,11 +11,17 @@ Variant customCT_id := .
 Variant customCT_sel (A : cmra) :=
 | (** Ownership token *) cifs_own (γ : gname) (a : cmra_car A).
 Arguments cifs_own {_} _ _.
-Set Printing Universes.
+(** The cmra could not be added directly as an argument to [cifs_own]
+    for universe reasons. *)
 
 Definition customCT A := Cifcon customCT_id (customCT_sel A)
 (λ _, Empty_set) (λ _, Empty_set) (λ _, unitO) _.
 (** [customC]: [customCT] registered *)
+(*
+    [inC : cifcon → cifcon → Type]
+    To be understood as the inclusion of one custom constructor
+    structure for [cif] into another.
+*)
 Notation customC A := (inC (customCT A)).
 Section customC.
   Context `{!customC A CON} {Σ}.
@@ -31,9 +37,16 @@ Section customC.
   #[export] Program Instance customCT_ecsem `{inG Σ A} {JUDG}
     : Ecsem (customCT A) CON JUDG Σ :=
     ECSEM (λ _ _ s _ _ _, customCT_sem s) _.
-  Next Obligation. done. Qed.
+  Next Obligation (* Proof of non-expansiveness *). done. Qed.
 End customC.
 (** [customC] semantics registered *)
+(*
+    [inCS : ∀ (CON' CON : cifcon) (JUDG : ofe) Σ,
+      inC CON' CON →
+      Ecsem CON' CON JUDG Σ →
+      Csem CON JUDG Σ → Prop]
+    To be understood as the inclusion of the semantics.
+*)
 Notation customCS A := (inCS (customCT A)).
 
 Section customC.
@@ -49,17 +62,25 @@ End customC.
 Section aProp_own.
 
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
+
+  Local Notation aProp b := (aProp CON JUDG Σ b).
+
+  Program Definition aProp_own_param A `{inG Σ A, customC A CON, !customCS A CON JUDG Σ}
+    γ (a : A) : aProp false :=
+    FProp (own γ a)%I (cif_own γ a)%cif _.
+  Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
+
   Context `{inG Σ A, customC A CON, !customCS A CON JUDG Σ}.
+
+  Program Definition aProp_own γ (a : A) : aProp false :=
+    FProp (own γ a)%I (cif_own γ a)%cif _.
+  Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
+
   Context `{inG Σ B, customC B CON, !customCS B CON JUDG Σ}.
 
-  Program Definition aProp_own γ (a : A) : aProp CON JUDG Σ false :=
+  Program Definition aProp_own' γ (a : B) : aProp false :=
     FProp (own γ a)%I (cif_own γ a)%cif _.
   Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
 
-  Program Definition aProp_own' γ (a : B) : aProp CON JUDG Σ false :=
-    FProp (own γ a)%I (cif_own γ a)%cif _.
-  Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
 
 End aProp_own.
-
-
