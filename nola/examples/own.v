@@ -71,12 +71,11 @@ Section aProp_own.
   Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
 
   Context `{inG Σ A, customC A CON, !customCS A CON JUDG Σ}.
+  Context `{inG Σ B, customC B CON, !customCS B CON JUDG Σ}.
 
   Program Definition aProp_own γ (a : A) : aProp false :=
     FProp (own γ a)%I (cif_own γ a)%cif _.
   Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
-
-  Context `{inG Σ B, customC B CON, !customCS B CON JUDG Σ}.
 
   Program Definition aProp_own' γ (a : B) : aProp false :=
     FProp (own γ a)%I (cif_own γ a)%cif _.
