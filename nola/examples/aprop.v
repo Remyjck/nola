@@ -9,6 +9,9 @@ From Stdlib Require Import Program.
 
 Import ProeqvNotation FunPRNotation iPropAppNotation ModwNotation DsemNotation CsemNotation.
 
+Declare Scope aprop_scope.
+Delimit Scope aprop_scope with a.
+
 Section embedding.
 
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
@@ -67,7 +70,9 @@ Section embedding.
       by (iIntros "[HP HQ]";
        iSplitL "HP";
        [ iApply HP | iApply HQ ]).
-    Defined.
+  Defined.
+
+  Notation "P ∗ Q" := (bi_sep P Q) : aprop_scope.
 
   Program Definition IProp_to_FProp {b} (P : aProp b) : aProp false :=
     match P with
@@ -337,8 +342,8 @@ Section inv.
     erewrite in_js. iApply "Hder".
   Qed.
 
-  Lemma semantic_alteration {b} N (P Q : aProp b) :
-    □ (∀ δ, ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
+  Lemma semantic_alteration' {b} N (P Q : aProp b) :
+    □ (∀ δ ih, ⌜Deriv ih δ⌝ -∗ ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
     ainv_tok N P -∗ ainv_tok N Q.
   Proof.
     iIntros "#Hequiv".
@@ -348,11 +353,30 @@ Section inv.
     iIntros "!>" (δ' HDeriv _ Hsound).
     unfold aProp_to_ofe_car.
     destruct b; dependent destruction P; dependent destruction Q; cbn.
-    - iSplit; iIntros; iNext; by iApply ("Hequiv" $! der).
+    - iSplit; iIntros; iNext; by iApply ("Hequiv" $! der _ der_Deriv).
     - iSplit; cbn; iIntros "HP".
-      + iApply b0. iApply "Hequiv". by iApply b.
-      + iApply b. iApply "Hequiv". by iApply b0.
-    Unshelve. apply _.
+      + iApply b0. iApply ("Hequiv" $! δ' _ HDeriv). by iApply b.
+      + iApply b. iApply ("Hequiv" $! δ' _ HDeriv). by iApply b0.
+  Qed.
+
+  Lemma semantic_alteration {b} N (P Q : aProp b) :
+    □ (∀ δ ih, ⌜Deriv ih δ⌝ -∗ ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
+    ainv_tok N P ∗-∗ ainv_tok N Q.
+  Proof.
+    iIntros "#Hequiv".
+    iSplit; iApply semantic_alteration'; iIntros "!> %δ %ih %Hder"; [ | iApply util.wand_iff_comm ];
+    iApply ("Hequiv" $! _ _ Hder).
+  Qed.
+
+  Lemma commute_under_inv {b₁ b₂} N₁ N₂ (P : aProp b₁) (Q : aProp b₂) :
+    ainv_tok N₁ (ainv_tok N₂ (aProp_sep P Q)) ∗-∗ ainv_tok N₁ (ainv_tok N₂ (aProp_sep Q P)).
+  Proof.
+    iApply semantic_alteration; iIntros "!> %δ %ih %Hder".
+    simpl.
+    iApply inv'_iff'; iIntros "%δ' %Hder' %Hih %Hsound !>".
+    dependent destruction P; dependent destruction Q; cbn;
+    rewrite bi.sep_comm;
+    iApply bi.wand_iff_refl.
   Qed.
 
 End inv.
