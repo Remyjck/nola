@@ -72,8 +72,6 @@ Section embedding.
        [ iApply HP | iApply HQ ]).
   Defined.
 
-  Notation "P ∗ Q" := (bi_sep P Q) : aprop_scope.
-
   Program Definition IProp_to_FProp {b} (P : aProp b) : aProp false :=
     match P with
     | IProp P => FProp (λ _, ▷ P)%I (▷ P)%cif _
@@ -168,6 +166,9 @@ End embedding.
 
 Arguments aProp _ _ _ {_} _.
 
+Infix "∗" := aProp_sep : aprop_scope.
+
+
 Notation "↑⟦ P ⟧" := (aProp_to_iProp_deriv der P).
 Notation "↑⟦ P ⟧( δ )" := (aProp_to_iProp_deriv δ P).
 
@@ -193,6 +194,7 @@ Section inv.
     setoid_rewrite sem_cif_in; simpl.
     iIntros; iApply bi.wand_iff_refl.
   Defined.
+  Arguments ainv_tok {_} _ _%_aprop_scope.
 
   (** Allocate [inv_tok] suspending the world satisfaction *)
   Lemma inv'_tok_alloc_suspend {sm} Px N :
@@ -342,6 +344,25 @@ Section inv.
     erewrite in_js. iApply "Hder".
   Qed.
 
+  Lemma inv_iff' {N : namespace} `{!Deriv ih δ} {Px Qx : cif CON Σ} :
+    □ (∀ δ, ⌜Deriv ih δ⌝ -∗ ⟦ Px ⟧(δ) ∗-∗ ⟦ Qx ⟧(δ)) -∗
+    inv' δ N Px -∗ inv' δ N Qx.
+  Proof.
+    iIntros "#Hequiv".
+    iApply inv'_iff.
+    iModIntro. iIntros.
+    by iApply "Hequiv".
+  Qed.
+
+  Lemma inv_iff {N : namespace} `{!Deriv ih δ} {Px Qx : cif CON Σ} :
+    □ (∀ δ, ⌜Deriv ih δ⌝ -∗ ⟦ Px ⟧(δ) ∗-∗ ⟦ Qx ⟧(δ)) -∗
+    inv' δ N Px ∗-∗ inv' δ N Qx.
+  Proof.
+    iIntros "#Hequiv".
+    iSplit; iApply inv_iff'; iIntros "!> %δ' %Hderiv". by iApply "Hequiv".
+    iApply util.wand_iff_comm. by iApply "Hequiv".
+  Qed.
+
   Lemma semantic_alteration' {b} N (P Q : aProp b) :
     □ (∀ δ ih, ⌜Deriv ih δ⌝ -∗ ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
     ainv_tok N P -∗ ainv_tok N Q.
@@ -369,11 +390,11 @@ Section inv.
   Qed.
 
   Lemma commute_under_inv {b₁ b₂} N₁ N₂ (P : aProp b₁) (Q : aProp b₂) :
-    ainv_tok N₁ (ainv_tok N₂ (aProp_sep P Q)) ∗-∗ ainv_tok N₁ (ainv_tok N₂ (aProp_sep Q P)).
+    ainv_tok N₁ (ainv_tok N₂ (P ∗ Q)) ∗-∗ ainv_tok N₁ (ainv_tok N₂ (Q ∗ P)).
   Proof.
     iApply semantic_alteration; iIntros "!> %δ %ih %Hder".
     simpl.
-    iApply inv'_iff'; iIntros "%δ' %Hder' %Hih %Hsound !>".
+    iApply inv_iff; iIntros "%δ' %Hder' !>".
     dependent destruction P; dependent destruction Q; cbn;
     rewrite bi.sep_comm;
     iApply bi.wand_iff_refl.
