@@ -59,27 +59,26 @@ Section customC.
   Next Obligation. move=>/= >. by rewrite sem_cif_in. Qed.
 End customC.
 
+From iris.heap_lang Require Import lang notation proofmode .
+
 Section aProp_own.
 
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
 
   Local Notation aProp b := (aProp CON JUDG Σ b).
 
-  Program Definition aProp_own_param A `{inG Σ A, customC A CON, !customCS A CON JUDG Σ}
+  Program Definition aProp_own `{inG Σ A, customC A CON, !customCS A CON JUDG Σ}
     γ (a : A) : aProp false :=
-    FProp (own γ a)%I (cif_own γ a)%cif _.
-  Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
+    FProp (λ _, own γ a)%I (cif_own γ a)%cif _.
+  Next Obligation. intros. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Qed.
 
-  Context `{inG Σ A, customC A CON, !customCS A CON JUDG Σ}.
-  Context `{inG Σ B, customC B CON, !customCS B CON JUDG Σ}.
+  Context `{!inG Σ (authR max_natUR), customC (authR max_natUR) CON, !customCS (authR max_natUR) CON JUDG Σ}.
+  Context `{!inG Σ (authR (optionUR (prodR fracR natR))), customC (authR (optionUR (prodR fracR natR))) CON, !customCS (authR (optionUR (prodR fracR natR))) CON JUDG Σ}.
 
-  Program Definition aProp_own γ (a : A) : aProp false :=
-    FProp (own γ a)%I (cif_own γ a)%cif _.
-  Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
+  Let N := nroot .@ "counter".
 
-  Program Definition aProp_own' γ (a : B) : aProp false :=
-    FProp (own γ a)%I (cif_own γ a)%cif _.
-  Next Obligation. intros. by rewrite sem_cif_in /=. Qed.
+  Definition is_counter (v : val) (γ₁ γ₂ : gname) (n : nat) (q : Qp): iProp Σ :=
+    ∃ (l : loc), ⌜v = LitV $ LitLoc l⌝ ∗ aProp_own γ₁ (◯ MaxNat n) ∗ aProp_own γ₂ (◯ Some (q, n)).
 
 
 End aProp_own.

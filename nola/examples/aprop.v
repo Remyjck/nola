@@ -162,11 +162,20 @@ Section embedding.
     - iPoseProof HP as "[HP→iP _]"; by iApply "HP→iP".
   Defined.
 
+  Program Definition aProp_pure (P : Prop) : aProp false :=
+    FProp (λ _, ⌜P⌝%I) (cif_pure P) _.
+
 End embedding.
 
 Arguments aProp _ _ _ {_} _.
 
 Infix "∗" := aProp_sep : aprop_scope.
+Notation "∀ x .. y , Px" :=
+  (aProp_all (λ x, .. (aProp_all (λ y, Px%a)) ..)) : aprop_scope.
+Notation "∃ x .. y , Px" :=
+  (aProp_ex (λ x, .. (aProp_ex (λ y, Px%a)) ..)) : aprop_scope.
+Infix "-∗" := aProp_wand : aprop_scope.
+Notation "⌜ φ ⌝" := (aProp_pure φ) : aprop_scope.
 
 
 Notation "↑⟦ P ⟧" := (aProp_to_iProp_deriv der P).
