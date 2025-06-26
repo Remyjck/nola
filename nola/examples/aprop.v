@@ -13,9 +13,6 @@ Section embedding.
 
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
 
-  (* Context `{!Dsem JUDG (cifO CON Σ) (iProp Σ),
-    !iffJ (cifO CON Σ) JUDG, !iffJS (cifO CON Σ) JUDG Σ}. *)
-
   Inductive aProp : bool -> Type :=
   | IProp :
     ∀ (P : iProp Σ), aProp true
@@ -23,6 +20,26 @@ Section embedding.
     ∀ (P : (JUDG -n> iProp Σ) -> iProp Σ) (P_cif : cif CON Σ),
       (∀ δ, ⟦ P_cif ⟧ᶜ(δ) ∗-∗ P δ) ->
       aProp false.
+
+  (** We need to parameterise [P] in [FProp P P_cif Hiff] because
+      otherwise we cannot define our invariant token:
+
+      [Program Definition ainv_tok {b} N (P : aProp b) : aProp false :=
+        FProp_demo (invd N P) (cif_inv N P) _.]
+
+      In order to complete the definition, we have to show
+        ⊢ (∀ δ, ⟦ cif_inv N P ⟧ᶜ(δ) ∗-∗ invd N P)
+      where [invd] := [inv' der], leading to an uprovable goal.
+
+      Indeed, the correct definition is
+
+      [Program Definition ainv_tok {b} N (P : aProp b) : aProp false :=
+        FProp_demo (λ δ, inv' δ N P) (cif_inv N P) _.]
+
+      For which the proof obligation is
+        ⊢ (∀ δ, ⟦ cif_inv N P ⟧ᶜ(δ) ∗-∗ inv' δ N P),
+      which holds.
+  *)
 
   Definition nola_prop := aProp false.
   Definition iris_prop := aProp true.
@@ -32,11 +49,14 @@ Section embedding.
   | FProp P _ _ => P δ
   end.
 
+  Notation "↑⟦ P ⟧" := (aProp_to_iProp_deriv der P).
+  Notation "↑⟦ P ⟧( δ )" := (aProp_to_iProp_deriv δ P).
+
   Program Definition aProp_sep {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) : aProp (b₁ || b₂) :=
     match P, Q with
     | IProp P, IProp Q => IProp (P ∗ Q)%I
-    | IProp P, FProp Q _ _ | FProp Q _ _, IProp P =>
-        IProp (P ∗ Q der)%I
+    | IProp P, FProp Q _ _ => IProp (P ∗ Q der)%I
+    | FProp P _ _, IProp Q => IProp (P der ∗ Q)%I
     | FProp iP P HP, FProp iQ Q HQ =>
         FProp (λ δ, iP δ ∗ iQ δ)%I (P ∗ Q)%cif _
     end.
@@ -48,7 +68,6 @@ Section embedding.
        iSplitL "HP";
        [ iApply HP | iApply HQ ]).
     Defined.
-
 
   Program Definition IProp_to_FProp {b} (P : aProp b) : aProp false :=
     match P with
@@ -82,7 +101,7 @@ Section embedding.
   Coercion aProp_to_ofe_car_func {b} (P : aProp b) : ofe_car_ofunc
     := aProp_to_FML P.
 
-  Lemma sm_to_FML (P : aProp false) : ⟦ P ⟧ᶜ ≡ (aProp_to_iProp_deriv der P).
+  Lemma sm_to_FML (P : aProp false) : ⟦ P ⟧ᶜ ≡ ↑⟦ P ⟧.
   Proof.
     dependent destruction P; cbn.
     iSplit; by [ iPoseProof (b der) as "[Himp _]" |iPoseProof (b der) as "[_ Himp]" ].
@@ -92,8 +111,8 @@ Section embedding.
   Proof.
     destruct b.
     - constructor.
-      refine (∀ a, aProp_to_iProp_deriv der (P a))%I.
-    - eapply (FProp (λ δ, ∀ a, aProp_to_iProp_deriv δ (P a))%I (∀ a, aProp_to_FML (P a))%cif).
+      refine (∀ a, ↑⟦ P a ⟧)%I.
+    - eapply (FProp (λ δ, ∀ a, ↑⟦ P a ⟧(δ))%I (∀ a, aProp_to_FML (P a))%cif).
       intros δ. simpl.
       iSplit; iIntros "HP %a"; iSpecialize ("HP" $! a);
         remember (P a) as Q; dependent destruction Q; cbn;
@@ -103,15 +122,15 @@ Section embedding.
   Program Definition aProp_all_pred {A : Type@{universes.Quant}} (P : A -> ∀ b, aProp b) : aProp true.
   Proof.
     constructor.
-    refine (∀ a, aProp_to_iProp_deriv der (P a true))%I.
+    refine (∀ a, ↑⟦ P a true ⟧)%I.
   Defined.
 
   Program Definition aProp_ex {A : Type@{cif_ex.u0}} {b : bool} (P : A -> aProp b) : aProp b.
   Proof.
     destruct b.
     - constructor.
-      refine (∃ a, aProp_to_iProp_deriv der (P a))%I.
-    - eapply (FProp (λ δ, ∃ a, aProp_to_iProp_deriv δ (P a))%I (∃ a, aProp_to_FML (P a))%cif).
+      refine (∃ a, ↑⟦ P a ⟧)%I.
+    - eapply (FProp (λ δ, ∃ a, ↑⟦ P a ⟧(δ))%I (∃ a, aProp_to_FML (P a))%cif).
       intros δ; simpl.
       iSplit; iIntros "[%a HP]"; iExists a;
         remember (P a) as Q; dependent destruction Q; cbn;
@@ -121,7 +140,7 @@ Section embedding.
   Program Definition aProp_ex_pred {A : Type@{universes.Quant}} (P : A -> ∀ b, aProp b) : aProp true.
   Proof.
     constructor.
-    refine (∃ a, aProp_to_iProp_deriv der (P a true))%I.
+    refine (∃ a, ↑⟦ P a true ⟧)%I.
   Defined.
 
   Program Definition aProp_wand {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) : aProp (b₁ || b₂) :=
@@ -144,6 +163,9 @@ End embedding.
 
 Arguments aProp _ _ _ {_} _.
 
+Notation "↑⟦ P ⟧" := (aProp_to_iProp_deriv der P).
+Notation "↑⟦ P ⟧( δ )" := (aProp_to_iProp_deriv δ P).
+
 From nola.examples Require Import con deriv.
 
 Section inv.
@@ -156,7 +178,8 @@ Section inv.
 
   Local Notation "'aProp'" := (aProp CON JUDG Σ).
 
-  Local Coercion aProp_to_iProp {b} (P : aProp b) : iProp Σ := aProp_to_iProp_deriv der P.
+  Local Coercion aProp_to_iProp {b} (P : aProp b) : iProp Σ :=
+    aProp_to_iProp_deriv der P.
 
   Program Definition ainv_tok {b} N (P : aProp b) : aProp false :=
     FProp (λ δ, inv' δ N P) (cif_inv N P) _.
@@ -315,9 +338,8 @@ Section inv.
   Qed.
 
   Lemma semantic_alteration {b} N (P Q : aProp b) :
-    (* □ (∀ δ, ⟦ P ⟧ᶜ(δ) ∗-∗ ⟦ Q ⟧ᶜ(δ)) -∗ *)
-    □ (∀ δ, aProp_to_iProp_deriv δ P ∗-∗ aProp_to_iProp_deriv δ Q) -∗
-    aProp_to_iProp (ainv_tok N P) -∗ aProp_to_iProp (ainv_tok N Q).
+    □ (∀ δ, ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
+    ainv_tok N P -∗ ainv_tok N Q.
   Proof.
     iIntros "#Hequiv".
     unfold ainv_tok; cbn.
