@@ -59,6 +59,12 @@ Section customC.
   Next Obligation. move=>/= >. by rewrite sem_cif_in. Qed.
 End customC.
 
+Class inA CON JUDG Σ A `{Csem CON JUDG Σ} : Type := A_OWN {
+  own_inG :: inG Σ A;
+  own_inC :: customC A CON;
+  own_inCS :: customCS A CON JUDG Σ;
+}.
+
 From iris.heap_lang Require Import lang notation proofmode .
 
 Section aProp_own.
@@ -72,8 +78,11 @@ Section aProp_own.
     FProp (λ _, own γ a)%I (cif_own γ a)%cif _.
   Next Obligation. intros. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Qed.
 
-  Context `{!inG Σ (authR max_natUR), customC (authR max_natUR) CON, !customCS (authR max_natUR) CON JUDG Σ}.
-  Context `{!inG Σ (authR (optionUR (prodR fracR natR))), customC (authR (optionUR (prodR fracR natR))) CON, !customCS (authR (optionUR (prodR fracR natR))) CON JUDG Σ}.
+  (* Context `{!inG Σ (authR max_natUR), customC (authR max_natUR) CON, !customCS (authR max_natUR) CON JUDG Σ}. *)
+  (* Context `{!inG Σ (authR (optionUR (prodR fracR natR))), customC (authR (optionUR (prodR fracR natR))) CON, !customCS (authR (optionUR (prodR fracR natR))) CON JUDG Σ}. *)
+
+  Context `{!inA CON JUDG Σ (authR max_natUR)}.
+  Context `{!inA CON JUDG Σ (authR (optionUR (prodR fracR natR)))}.
 
   Let N := nroot .@ "counter".
 
