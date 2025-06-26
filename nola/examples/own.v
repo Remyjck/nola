@@ -77,8 +77,9 @@ Section aProp_own.
 
   Let N := nroot .@ "counter".
 
-  Definition is_counter (v : val) (γ₁ γ₂ : gname) (n : nat) (q : Qp): iProp Σ :=
-    ∃ (l : loc), ⌜v = LitV $ LitLoc l⌝ ∗ aProp_own γ₁ (◯ MaxNat n) ∗ aProp_own γ₂ (◯ Some (q, n)).
+  Notation own := aProp_own.
 
+  Definition is_counter (v : val) (γ₁ γ₂ : gname) (n : nat) (q : Qp): aProp false :=
+    (∃ (l : loc), ⌜v = LitV $ LitLoc l⌝ ∗ own γ₁ (◯ MaxNat n) ∗ own γ₂ (◯ Some (q, n)))%a.
 
 End aProp_own.
