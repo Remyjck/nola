@@ -24,7 +24,7 @@ End DsemNotation'.
 Import DsemNotation'.
 
 #[export] Instance dsem_proper `{!Dsem JUDG A PROP} {δ} :
-  Proper ((≡) ==> (⊣⊢)) (@dsem JUDG A PROP _ δ).
+  Proper ((≡) ==> (⊣⊢)) ( @dsem JUDG A PROP _ δ).
 Proof. apply ne_proper, _. Qed.
 
 (** Judgment semantics *)
@@ -144,6 +144,7 @@ Section deriv.
   (** [der] is sound w.r.t. the semantics at [der] *)
   Lemma der_sound {J} : der J ⊢ ⟦ J ⟧(der).
   Proof. move: J. exact (psg_post (OT:=JUDG -n> PROP)). Qed.
+
 End deriv.
 
 Module DsemNotation.

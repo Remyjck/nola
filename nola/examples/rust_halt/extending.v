@@ -32,11 +32,13 @@ rust_haltGS_fborrow :: fborrowGS (cifOF CON) Σ;
 
 (** [customCT]: Constructor *)
 Variant customCT_id := .
-Variant customCT_sel (A : cmra) :=
+Variant customCT_sel (A : cmra):=
+| (** Points-to token *) cifs_pointsto (l : loc) (q : Qp) (v : val)
+| (** Prophecy token *) cifs_proph_tok (ξ : aprvar xty) (q : Qp)
 | (** Ownership token *) cifs_own (γ : gname) (a : cmra_car A).
+Arguments cifs_pointsto {_} _ _ _.
+Arguments cifs_proph_tok {_} _ _.
 Arguments cifs_own {_} _ _.
-Set Printing Universes.
-
 
 Definition customCT A := Cifcon customCT_id (customCT_sel A)
 (λ _, Empty_set) (λ _, Empty_set) (λ _, unitO) _.
@@ -44,6 +46,12 @@ Definition customCT A := Cifcon customCT_id (customCT_sel A)
 Notation customC A := (inC (customCT A)).
 Section customC.
   Context `{!customC A CON} {Σ}.
+  (** [cif_pointsto]: Points-to token *)
+  Definition cif_pointsto l q v : cif CON Σ :=
+    cif_in (customCT A) (cifs_pointsto l q v) nullary nullary ().
+  (** [cif_proph_tok]: Prophecy token *)
+  Definition cif_proph_tok ξ q : cif CON Σ :=
+    cif_in (customCT A) (cifs_proph_tok ξ q) nullary nullary ().
   (** [cif_own]: Own token *)
   Definition cif_own γ a : cif CON Σ :=
     cif_in (customCT A) (cifs_own γ a) nullary nullary ().
@@ -52,6 +60,8 @@ Section customC.
   (** Semantics of [customCT] *)
   Definition customCT_sem `{inG Σ A} (s : customCT_sel A) : iProp Σ :=
     match s with
+    | cifs_pointsto l q v => l ↦{q} v
+    | cifs_proph_tok ξ q => q:[ξ]
     | cifs_own γ a => own γ a
     end.
   #[export] Program Instance customCT_ecsem `{inG Σ A} {JUDG}
@@ -61,6 +71,10 @@ Section customC.
 End customC.
 (** [customC] semantics registered *)
 Notation customCS A := (inCS (customCT A)).
+(** Notation *)
+Notation "l ↦{ q } v" := (cif_pointsto l q v) : cif_scope.
+Notation "l ↦ v" := (cif_pointsto l 1 v) : cif_scope.
+Notation "q :[ ξ ]" := (cif_proph_tok ξ q) : cif_scope.
 
 Section customC.
 Context `{inG Σ A, !customC A CON, !Csem CON JUDG Σ, !rust_haltGS CON Σ,
@@ -189,3 +203,193 @@ Section lrust.
   Qed.
 End lrust.
 
+(** ** Shared borrows *)
+
+(** [spointsto]: Shared borrow over a points-to token *)
+Definition spointsto `{!rust_haltGS CON Σ, !rust_haltC CON A} α l v
+  : iProp Σ := fbor_tok α (λ q, l ↦{q} v)%cif.
+Notation "l ↦ˢ[ α ] v" := (spointsto α l v)
+ (at level 20, format "l  ↦ˢ[ α ]  v") : bi_scope.
+
+(** [spointsto_vec]: Iterative [spointsto] *)
+Definition spointsto_vec `{!rust_haltGS CON Σ, !rust_haltC CON A} α l vl :=
+  ([∗ list] k ↦ v ∈ vl, (l +ₗ k) ↦ˢ[α] v)%I.
+Notation "l ↦∗ˢ[ α ] vl" := (spointsto_vec α l vl)
+  (at level 20, format "l  ↦∗ˢ[ α ]  vl") : bi_scope.
+
+(** [sproph_tok]: Shared borrow over a prophecy token *)
+Definition sproph_tok `{!rust_haltGS CON Σ, !rust_haltC CON A} α ξ
+  : iProp Σ := fbor_tok α (λ q, q:[ξ])%cif.
+Notation "[ ξ ]:ˢ[ α ]" := (sproph_tok α ξ) (format "[ ξ ]:ˢ[ α ]") : bi_scope.
+
+(** [sproph_toks]: Iterative [sproph_tok] *)
+Notation sproph_toks α ξl := ([∗ list] ξ ∈ ξl, [ξ]:ˢ[α])%I.
+Notation "[ ξl ]:∗ˢ[ α ]" := (sproph_toks α ξl) (format "[ ξl ]:∗ˢ[ α ]")
+  : bi_scope.
+
+Section fbor_tok.
+  Context `{!rust_haltGS CON Σ, !rust_haltC CON A}.
+
+  (** [spointsto] is timeless *)
+  #[export] Instance spointsto_timeless {α l v} : Timeless (l ↦ˢ[α] v).
+  Proof. exact _. Qed.
+  #[export] Instance spointsto_vec_timeless {α l vl} : Timeless (l ↦∗ˢ[α] vl).
+  Proof. exact _. Qed.
+  (** [sproph_tok] is timeless *)
+  #[export] Instance sproph_tok_timeless {α ξ} : Timeless [ξ]:ˢ[α].
+  Proof. exact _. Qed.
+  #[export] Instance sproph_toks_timeless {α ξl} : Timeless [ξl]:∗ˢ[α].
+  Proof. exact _. Qed.
+
+  (** [spointsto_vec] over nil *)
+  Lemma spointsto_vec_nil {α l} : l ↦∗ˢ[α] [] ⊣⊢ True.
+  Proof. done. Qed.
+  (** [spointsto_vec] over cons *)
+  Lemma spointsto_vec_cons {α l v vl} :
+    l ↦∗ˢ[α] (v :: vl) ⊣⊢ l ↦ˢ[α] v ∗ (l +ₗ 1) ↦∗ˢ[α] vl.
+  Proof.
+    rewrite /spointsto_vec /= shift_loc_0. do 4 f_equiv. by rewrite shift_loc_S.
+  Qed.
+  (** [spointsto_vec] over [++] *)
+  Lemma spointsto_vec_app {α l vl vl'} :
+    l ↦∗ˢ[α] (vl ++ vl') ⊣⊢ l ↦∗ˢ[α] vl ∗ (l +ₗ length vl) ↦∗ˢ[α] vl'.
+  Proof.
+    rewrite /spointsto_vec big_sepL_app. do 4 f_equiv.
+    by rewrite shift_loc_assoc_nat.
+  Qed.
+
+  Context `{!rust_haltJ CON JUDG Σ, !Csem CON JUDG Σ, !Jsem JUDG (iProp Σ),
+    inG Σ A, !rust_haltCS CON JUDG}.
+
+  (** Modify the lifetime of [spointsto] *)
+  Lemma spointsto_lft {α β l v} : β ⊑□ α -∗ l ↦ˢ[α] v -∗ l ↦ˢ[β] v.
+  Proof. exact fbor_tok_lft. Qed.
+  (** Modify the lifetime of [spointsto_vec] *)
+  Lemma spointsto_vec_lft {α β l vl} : β ⊑□ α -∗ l ↦∗ˢ[α] vl -∗ l ↦∗ˢ[β] vl.
+  Proof.
+    iIntros "#⊑ ↦". iApply (big_sepL_impl with "↦"). iIntros "!>" (?? _).
+    by iApply spointsto_lft.
+  Qed.
+
+  (** Modify the lifetime of [sproph_tok] *)
+  Lemma sproph_tok_lft {α β ξ} : β ⊑□ α -∗ [ξ]:ˢ[α] -∗ [ξ]:ˢ[β].
+  Proof. exact fbor_tok_lft. Qed.
+  (** Modify the lifetime of [sproph_toks] *)
+  Lemma sproph_toks_lft {α β ξl} : β ⊑□ α -∗ [ξl]:∗ˢ[α] -∗ [ξl]:∗ˢ[β].
+  Proof.
+    iIntros "#⊑ ↦". iApply (big_sepL_impl with "↦"). iIntros "!>" (?? _).
+    by iApply sproph_tok_lft.
+  Qed.
+
+  (** Access [spointsto] *)
+  Lemma spointsto_acc {α l v r} :
+    r.[α] -∗ l ↦ˢ[α] v =[rust_halt_wsat]{⊤}=∗ ∃ q,
+      l ↦{q} v ∗ (l ↦{q} v =[rust_halt_wsat]=∗ r.[α]).
+  Proof.
+    iIntros "α ↦".
+    iMod (fbor_tok_acc (M:=borrowM) with "α ↦") as (?) "/=[↦ →α]".
+    { move=>/= ??. by rewrite !sem_cif_in /= heap_pointsto_fractional. }
+    rewrite sem_cif_in /=. iFrame "↦". iIntros "!> ↦". by iMod ("→α" with "↦").
+  Qed.
+
+  (** Access [spointsto_vec] *)
+  Lemma spointsto_vec_acc {α l vl r} :
+    r.[α] -∗ l ↦∗ˢ[α] vl =[rust_halt_wsat]{⊤}=∗ ∃ q,
+      l ↦∗{q} vl ∗ (l ↦∗{q} vl =[rust_halt_wsat]=∗ r.[α]).
+  Proof.
+    move: l r. elim: vl=>//=.
+    { unfold heap_pointsto_vec=>/=. iIntros (??) "$ _ !>". by iExists 1%Qp. }
+    move=> v vl IH l ?. rewrite spointsto_vec_cons. iIntros "[α α'] [↦ ↦s]".
+    iMod (spointsto_acc with "α ↦") as (?) "[↦ →α]".
+    iMod (IH with "α' ↦s") as (?) "[↦s →α']". iModIntro.
+    iDestruct (heap_pointsto_just_vec_fuse with "↦ ↦s") as (?) "[$ →↦↦s]".
+    iIntros "↦↦s". iDestruct ("→↦↦s" with "↦↦s") as "[↦ ↦s]".
+    iMod ("→α" with "↦") as "$". by iApply "→α'".
+  Qed.
+
+  (** Allocate [spointsto] *)
+  Lemma spointsto_alloc {α l v r} :
+    r.[α] -∗ bor_tok α (▷ l ↦ v)%cif =[rust_halt_wsat]{⊤}=∗ r.[α] ∗ l ↦ˢ[α] v.
+  Proof.
+    iIntros "α b".
+    iMod (bor_tok_open (M:=borrowM) with "α b") as "/=[o >↦]".
+    iMod (obor_tok_subdiv (FML:=cifOF _) (M:=borrowM) (sm:=⟦⟧ᶜ) [_ ↦ _]%cif
+      with "[] o [↦] []") as "($ & _ & b & _)"=>/=.
+    { iApply lft_sincl_refl. } { rewrite sem_cif_in /=. iFrame. }
+    { rewrite sem_cif_in /=. by iIntros "_ ($ & _)". }
+    by iMod (fbor_tok_alloc (FML:=cifOF _) (λ q, l ↦{q} v)%cif with "b") as "$".
+  Qed.
+
+  (** Allocate [spointsto_vec] *)
+  Lemma spointsto_vec_alloc {α l vl r} :
+    r.[α] -∗ bor_tok α (▷ l ↦∗ vl)%cif =[rust_halt_wsat]{⊤}=∗
+      r.[α] ∗ l ↦∗ˢ[α] vl.
+  Proof.
+    move: l r. elim: vl=>/=.
+    { iIntros (??) "$ _". by rewrite spointsto_vec_nil. }
+    iIntros (v vl IH l ?) "α b".
+    iMod (bor_tok_open (M:=borrowM) with "α b") as "/=[o ↦s]".
+    rewrite {2}heap_pointsto_vec_cons. iDestruct "↦s" as "[>↦ ↦s]".
+    iMod (obor_tok_subdiv (FML:=cifOF _) (M:=borrowM) (sm:=⟦⟧ᶜ) [_ ↦ _; ▷ _]%cif
+      with "[] o [↦ $↦s] []") as "(α & _ & b & b' & _)"=>/=.
+    { iApply lft_sincl_refl. } { rewrite sem_cif_in /=. iFrame. }
+    { rewrite heap_pointsto_vec_cons sem_cif_in /=.
+      by iIntros "_ ($ & $ & _)". }
+    rewrite spointsto_vec_cons. iMod (IH with "α b'") as "[$$]".
+    by iMod (fbor_tok_alloc (FML:=cifOF _) (λ q, l ↦{q} v)%cif with "b")
+      as "$".
+  Qed.
+
+  (** Access [sproph_tok] *)
+  Lemma sproph_tok_acc {α ξ r} :
+    r.[α] -∗ [ξ]:ˢ[α] =[rust_halt_wsat]{⊤}=∗ ∃ q,
+      q:[ξ] ∗ (q:[ξ] =[rust_halt_wsat]=∗ r.[α]).
+  Proof.
+    iIntros "α ξ".
+    iMod (fbor_tok_acc (M:=borrowM) with "α ξ") as (?) "/=[ξ →α]".
+    { move=>/= ??. by rewrite !sem_cif_in /= proph_tok_fractional. }
+    rewrite sem_cif_in /=. iFrame "ξ". iIntros "!> ξ". by iMod ("→α" with "ξ").
+  Qed.
+
+  (** Access [sproph_toks] *)
+  Lemma sproph_toks_acc {α ξl r} :
+    r.[α] -∗ [ξl]:∗ˢ[α] =[rust_halt_wsat]{⊤}=∗ ∃ q,
+      q:∗[ξl] ∗ (q:∗[ξl] =[rust_halt_wsat]=∗ r.[α]).
+  Proof.
+    move: r. elim: ξl=>/=. { iIntros (?) "$ _ !>". by iExists 1%Qp. }
+    iIntros (ξ ξl IH ?) "[α α'] [ξ ξl]".
+    iMod (sproph_tok_acc with "α ξ") as (?) "[ξ →α]".
+    iMod (IH with "α' ξl") as (?) "[ξl →α']". iModIntro.
+    iDestruct (proph_tok_toks_fuse with "ξ ξl") as (?) "/=[$ →ξξl]".
+    iIntros "ξξl". iDestruct ("→ξξl" with "ξξl") as "[ξ ξl]".
+    iMod ("→α" with "ξ") as "$". by iApply "→α'".
+  Qed.
+
+  (** Allocate [sproph_tok] *)
+  Lemma sproph_tok_alloc {α ξ r} :
+    r.[α] -∗ bor_tok α (▷ 1:[ξ])%cif =[rust_halt_wsat]{⊤}=∗ r.[α] ∗ [ξ]:ˢ[α].
+  Proof.
+    iIntros "α b".
+    iMod (bor_tok_open (M:=borrowM) with "α b") as "/=[o >ξ]".
+    iMod (obor_tok_subdiv (FML:=cifOF _) (M:=borrowM) (sm:=⟦⟧ᶜ) [1:[ξ]]%cif
+      with "[] o [ξ] []") as "($ & _ & b & _)"=>/=.
+    { iApply lft_sincl_refl. } { rewrite sem_cif_in /=. iFrame. }
+    { rewrite sem_cif_in /=. by iIntros "_ ($ & _)". }
+    by iMod (fbor_tok_alloc (FML:=cifOF _) (λ q, q:[ξ])%cif with "b") as "$".
+  Qed.
+
+  (** Allocate [sproph_toks] *)
+  Lemma sproph_toks_alloc {α ξl r} :
+    r.[α] -∗ bor_tok α (▷ 1:∗[ξl])%cif =[rust_halt_wsat]{⊤}=∗
+      r.[α] ∗ [ξl]:∗ˢ[α].
+  Proof.
+    move: r. elim: ξl=>/=; [by iIntros (?) "$ _"|]. iIntros (ξ ξl IH ?) "α b".
+    iMod (bor_tok_open (M:=borrowM) with "α b") as "/=[o [>ξ ξl]]".
+    iMod (obor_tok_subdiv (FML:=cifOF _) (M:=borrowM) (sm:=⟦⟧ᶜ) [_:[_]; ▷ _]%cif
+      with "[] o [ξ $ξl] []") as "(α & _ & b & b' & _)"=>/=.
+    { iApply lft_sincl_refl. } { rewrite sem_cif_in /=. iFrame. }
+    { rewrite sem_cif_in /=. by iIntros "_ ($ & $ & _)". }
+    iMod (IH with "α b'") as "[$$]".
+    by iMod (fbor_tok_alloc (FML:=cifOF _) (λ q, q:[ξ])%cif with "b") as "$".
+  Qed.
+End fbor_tok.

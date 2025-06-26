@@ -20,38 +20,46 @@ Section embedding.
   | IProp :
     ∀ (P : iProp Σ), aProp true
   | FProp :
-    ∀ (P : iProp Σ) (P_cif : cif CON Σ),
-      ⟦ P_cif ⟧ᶜ ≡ P ->
+    ∀ (P : (JUDG -n> iProp Σ) -> iProp Σ) (P_cif : cif CON Σ),
+      (∀ δ, ⟦ P_cif ⟧ᶜ(δ) ∗-∗ P δ) ->
       aProp false.
 
   Definition nola_prop := aProp false.
   Definition iris_prop := aProp true.
-  #[reversible] Coercion aProp_to_iProp {b} (P: aProp b) :=
+  Definition aProp_to_iProp_deriv δ {b} (P: aProp b) :=
   match P with
   | IProp P => P
-  | FProp P _ _ => P
+  | FProp P _ _ => P δ
   end.
 
   Program Definition aProp_sep {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) : aProp (b₁ || b₂) :=
     match P, Q with
-    | IProp P, IProp Q | IProp P, FProp Q _ _ | FProp P _ _, IProp Q =>
-        IProp (P ∗ Q)%I
+    | IProp P, IProp Q => IProp (P ∗ Q)%I
+    | IProp P, FProp Q _ _ | FProp Q _ _, IProp P =>
+        IProp (P ∗ Q der)%I
     | FProp iP P HP, FProp iQ Q HQ =>
-        FProp (iP ∗ iQ)%I (P ∗ Q)%cif _
+        FProp (λ δ, iP δ ∗ iQ δ)%I (P ∗ Q)%cif _
     end.
-  Next Obligation. rewrite HP. rewrite HQ. reflexivity. Defined.
+  Next Obligation.
+    clear Heq_P Heq_Q.
+    specialize (HP δ); specialize (HQ δ).
+    iSplit;
+      by (iIntros "[HP HQ]";
+       iSplitL "HP";
+       [ iApply HP | iApply HQ ]).
+    Defined.
 
 
   Program Definition IProp_to_FProp {b} (P : aProp b) : aProp false :=
     match P with
-    | IProp P => FProp (▷ P)%I (▷ P)%cif _
+    | IProp P => FProp (λ _, ▷ P)%I (▷ P)%cif _
     | FProp iP P HP => FProp iP P HP
     end.
 
   Coercion aProp_to_bi_car {b} (P : aProp b) : bi_car (iProp Σ) :=
     match P with
     | IProp P => P
-    | FProp iP P HP => iP
+    | FProp iP P HP => iP der
     end.
 
   Program Definition nola_to_FML (P : aProp false) : cif CON Σ.
@@ -68,64 +76,73 @@ Section embedding.
 
   Definition ofe_car_iprop := ofe_car (iProp Σ).
   Coercion aProp_to_ofe_car' {b} (P : aProp b) : ofe_car_iprop
-    := aProp_to_iProp P.
+    := aProp_to_iProp_deriv der P.
 
   Definition ofe_car_ofunc {CON Σ} := ofe_car (oFunctor_apply (cifOF CON) (iProp Σ)).
   Coercion aProp_to_ofe_car_func {b} (P : aProp b) : ofe_car_ofunc
     := aProp_to_FML P.
 
-  Lemma sm_to_FML (P : aProp false) : ⟦ P ⟧ᶜ ≡ (aProp_to_iProp P).
-  Proof. by dependent destruction P. Qed.
-
+  Lemma sm_to_FML (P : aProp false) : ⟦ P ⟧ᶜ ≡ (aProp_to_iProp_deriv der P).
+  Proof.
+    dependent destruction P; cbn.
+    iSplit; by [ iPoseProof (b der) as "[Himp _]" |iPoseProof (b der) as "[_ Himp]" ].
+  Qed.
 
   Program Definition aProp_all {A : Type@{cif_all.u0}} {b : bool} (P : A -> aProp b) : aProp b.
   Proof.
     destruct b.
     - constructor.
-      refine (∀ a, (P a))%I.
-    - eapply (FProp (∀ a, aProp_to_iProp (P a))%I (∀ a, aProp_to_FML (P a))%cif).
-      simpl. apply bi.forall_proper.
-      apply pointwise_pointwise.
-      split. remember (P y) as Q; dependent destruction Q; subst; rewrite <- HeqQ.
-      by destruct e.
+      refine (∀ a, aProp_to_iProp_deriv der (P a))%I.
+    - eapply (FProp (λ δ, ∀ a, aProp_to_iProp_deriv δ (P a))%I (∀ a, aProp_to_FML (P a))%cif).
+      intros δ. simpl.
+      iSplit; iIntros "HP %a"; iSpecialize ("HP" $! a);
+        remember (P a) as Q; dependent destruction Q; cbn;
+        by iApply b.
   Defined.
 
   Program Definition aProp_all_pred {A : Type@{universes.Quant}} (P : A -> ∀ b, aProp b) : aProp true.
   Proof.
     constructor.
-    refine (∀ a, aProp_to_iProp (P a true))%I.
+    refine (∀ a, aProp_to_iProp_deriv der (P a true))%I.
   Defined.
 
   Program Definition aProp_ex {A : Type@{cif_ex.u0}} {b : bool} (P : A -> aProp b) : aProp b.
   Proof.
     destruct b.
     - constructor.
-      refine (∃ a, aProp_to_iProp (P a))%I.
-    - eapply (FProp (∃ a, aProp_to_iProp (P a))%I (∃ a, aProp_to_FML (P a))%cif).
-      simpl. apply bi.exist_proper.
-      apply pointwise_pointwise.
-      split. remember (P y) as Q; dependent destruction Q; subst; rewrite <- HeqQ.
-      by destruct e.
+      refine (∃ a, aProp_to_iProp_deriv der (P a))%I.
+    - eapply (FProp (λ δ, ∃ a, aProp_to_iProp_deriv δ (P a))%I (∃ a, aProp_to_FML (P a))%cif).
+      intros δ; simpl.
+      iSplit; iIntros "[%a HP]"; iExists a;
+        remember (P a) as Q; dependent destruction Q; cbn;
+        by iApply b.
   Defined.
 
   Program Definition aProp_ex_pred {A : Type@{universes.Quant}} (P : A -> ∀ b, aProp b) : aProp true.
   Proof.
     constructor.
-    refine (∃ a, aProp_to_iProp (P a true))%I.
+    refine (∃ a, aProp_to_iProp_deriv der (P a true))%I.
   Defined.
 
   Program Definition aProp_wand {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) : aProp (b₁ || b₂) :=
     match P in aProp b₁, Q in aProp b₂ with
-    | IProp P, IProp Q | IProp P, FProp Q _ _ | FProp P _ _, IProp Q =>
-        IProp (P -∗ Q)%I
+    | IProp P, IProp Q => IProp (P -∗ Q)%I
+    | IProp P, FProp Q _ _ => IProp (P -∗ Q der)%I
+    | FProp P _ _, IProp Q => IProp (P der -∗ Q)%I
     | FProp iP P HP, FProp iQ Q HQ =>
-        FProp (iP -∗ iQ)%I (P -∗ Q)%cif _
+        FProp (λ δ, iP δ -∗ iQ δ)%I (P -∗ Q)%cif _
     end.
-  Next Obligation. rewrite HP. rewrite HQ. reflexivity. Defined.
+  Next Obligation.
+    clear Heq_P Heq_Q.
+    specialize (HP δ); specialize (HQ δ).
+    iSplit; iIntros "HP→Q HP"; iApply HQ; iApply "HP→Q".
+    - iPoseProof HP as "[_ HiP→P]"; by iApply "HiP→P".
+    - iPoseProof HP as "[HP→iP _]"; by iApply "HP→iP".
+  Defined.
 
 End embedding.
 
-Arguments aProp _ _ _ {_ _}.
+Arguments aProp _ _ _ {_} _.
 
 From nola.examples Require Import con deriv.
 
@@ -139,11 +156,14 @@ Section inv.
 
   Local Notation "'aProp'" := (aProp CON JUDG Σ).
 
+  Local Coercion aProp_to_iProp {b} (P : aProp b) : iProp Σ := aProp_to_iProp_deriv der P.
+
   Program Definition ainv_tok {b} N (P : aProp b) : aProp false :=
-    FProp (invd N P) (cif_inv N P) _.
+    FProp (λ δ, inv' δ N P) (cif_inv N P) _.
   Next Obligation.
     unfold aProp_to_ofe_car, aProp_to_FML; simpl.
-    setoid_rewrite sem_cif_in; simpl. reflexivity.
+    setoid_rewrite sem_cif_in; simpl.
+    iIntros; iApply bi.wand_iff_refl.
   Defined.
 
   (** Allocate [inv_tok] suspending the world satisfaction *)
@@ -178,10 +198,9 @@ Section inv.
     { instantiate (1 := P).
       dependent destruction P; cbn.
       - iApply "HP".
-      - by rewrite e. }
+      - by iApply b. }
     iFrame "W".
     iApply "Hinv".
-    Unshelve.
   Qed.
 
   Lemma ainv_tok_inv_alloc {b} N1 N2 (P : aProp b) : N1 ## N2 ->
@@ -210,7 +229,7 @@ Section inv.
     iSplitL "HP".
     { dependent destruction Px; cbn.
       - by iApply "HJ".
-      - rewrite <- e. by iApply "HJ". }
+      - iApply b. by iApply "HJ". }
     iIntros "Px W".
     iDestruct (sinv_tok_acc with "sm W") as "[[[_ D']|i] →W]".
     { iDestruct (ownD_singleton_twice with "[$D $D']") as %[]. }
@@ -218,7 +237,7 @@ Section inv.
     iLeft. iFrame.
     dependent destruction Px; cbn.
     - iApply ("HJ" with "Px").
-    - rewrite <- e. iApply ("HJ" with "Px").
+    - iApply "HJ". by iApply b.
   Qed.
 
   Lemma ainv_tok_acc_nola {N E} {Px : aProp false} : ↑N ⊆ E →
@@ -295,20 +314,9 @@ Section inv.
     erewrite in_js. iApply "Hder".
   Qed.
 
-  Lemma sm_to_FML' δ (P : aProp false) :
-    (∀ J : JUDG, der J ⊢ ⟦ J ⟧(δ)) ->
-    ⟦ aProp_to_FML P ⟧ᶜ(δ) ≡ aProp_to_iProp P.
-  Proof.
-    intros Hδ.
-    dependent destruction P; cbn.
-    rewrite -e.
-    iSplit; iIntros "Hderiv".
-    - admit.
-    - admit.
-  Admitted.
-
   Lemma semantic_alteration {b} N (P Q : aProp b) :
-    □ (⟦ P ⟧ᶜ ∗-∗ ⟦ Q ⟧ᶜ) -∗
+    (* □ (∀ δ, ⟦ P ⟧ᶜ(δ) ∗-∗ ⟦ Q ⟧ᶜ(δ)) -∗ *)
+    □ (∀ δ, aProp_to_iProp_deriv δ P ∗-∗ aProp_to_iProp_deriv δ Q) -∗
     aProp_to_iProp (ainv_tok N P) -∗ aProp_to_iProp (ainv_tok N Q).
   Proof.
     iIntros "#Hequiv".
@@ -317,9 +325,12 @@ Section inv.
     iApply (inv'_iff with "[] Hinv").
     iIntros "!>" (δ' HDeriv _ Hsound).
     unfold aProp_to_ofe_car.
-    destruct b; dependent destruction P; dependent destruction Q;
-      first done.
-    by rewrite !sm_to_FML !sm_to_FML'.
+    destruct b; dependent destruction P; dependent destruction Q; cbn.
+    - iSplit; iIntros; iNext; by iApply ("Hequiv" $! der).
+    - iSplit; cbn; iIntros "HP".
+      + iApply b0. iApply "Hequiv". by iApply b.
+      + iApply b. iApply "Hequiv". by iApply b0.
+    Unshelve. apply _.
   Qed.
 
 End inv.

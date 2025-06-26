@@ -47,19 +47,22 @@ Class rust_haltGS CON Σ : Type := RustHaltGS {
 Variant customCT_id := .
 Variant customCT_sel :=
 | (** Points-to token *) cifs_pointsto (l : loc) (q : Qp) (v : val)
-| (** Prophecy token *) cifs_proph_tok (ξ : aprvar xty) (q : Qp).
+| (** Prophecy token *) cifs_proph_tok (ξ : aprvar xty) (q : Qp)
+| (** Ownership token *) cifs_own `{!inG Σ A} (γ : gname) (A : cmra_car A).
 Definition customCT := Cifcon customCT_id customCT_sel
   (λ _, Empty_set) (λ _, Empty_set) (λ _, unitO) _.
 (** [customC]: [customCT] registered *)
 Notation customC := (inC customCT).
 Section customC.
-  Context `{!customC CON} {Σ}.
+  Context `{!customC CON} (* {Σ} *).
   (** [cif_pointsto]: Points-to token *)
   Definition cif_pointsto l q v : cif CON Σ :=
     cif_in customCT (cifs_pointsto l q v) nullary nullary ().
   (** [cif_proph_tok]: Prophecy token *)
   Definition cif_proph_tok ξ q : cif CON Σ :=
     cif_in customCT (cifs_proph_tok ξ q) nullary nullary ().
+  Definition cif_own γ A : cif CON Σ :=
+    cif_in customCT (cifs_own γ A) nullary nullary ().
 
   Context `{!rust_haltGS TY Σ}.
   (** Semantics of [customCT] *)
@@ -67,6 +70,7 @@ Section customC.
     match s with
     | cifs_pointsto l q v => l ↦{q} v
     | cifs_proph_tok ξ q => q:[ξ]
+    | cifs_own γ A => own γ A
     end.
   #[export] Program Instance customCT_ecsem {JUDG}
     : Ecsem customCT CON JUDG Σ :=
@@ -90,6 +94,9 @@ Section customC.
   Next Obligation. move=>/= >. by rewrite sem_cif_in. Qed.
   #[export] Program Instance proph_tok_as_cif {q ξ} :
     AsCif CON (λ _, q:[ξ])%I := AS_CIF q:[ξ] _.
+  Next Obligation. move=>/= >. by rewrite sem_cif_in. Qed.
+  #[export] Program Instance own_as_cif {γ} {a : A} :
+    AsCif CON (λ _, own γ a)%I := AS_CIF (cif_own γ a) _.
   Next Obligation. move=>/= >. by rewrite sem_cif_in. Qed.
 End customC.
 
