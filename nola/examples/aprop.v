@@ -52,26 +52,6 @@ Section embedding.
   | FProp P _ _ => P δ
   end.
 
-  Notation "↑⟦ P ⟧" := (aProp_to_iProp_deriv der P).
-  Notation "↑⟦ P ⟧( δ )" := (aProp_to_iProp_deriv δ P).
-
-  Program Definition aProp_sep {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) : aProp (b₁ || b₂) :=
-    match P, Q with
-    | IProp P, IProp Q => IProp (P ∗ Q)%I
-    | IProp P, FProp Q _ _ => IProp (P ∗ Q der)%I
-    | FProp P _ _, IProp Q => IProp (P der ∗ Q)%I
-    | FProp iP P HP, FProp iQ Q HQ =>
-        FProp (λ δ, iP δ ∗ iQ δ)%I (P ∗ Q)%cif _
-    end.
-  Next Obligation.
-    clear Heq_P Heq_Q.
-    specialize (HP δ); specialize (HQ δ).
-    iSplit;
-      by (iIntros "[HP HQ]";
-       iSplitL "HP";
-       [ iApply HP | iApply HQ ]).
-  Defined.
-
   Program Definition IProp_to_FProp {b} (P : aProp b) : aProp false :=
     match P with
     | IProp P => FProp (λ _, ▷ P)%I (▷ P)%cif _
@@ -90,6 +70,12 @@ Section embedding.
     apply P_cif.
   Defined.
 
+  Lemma sm_to_FML (P : aProp false) : ⟦ nola_to_FML P ⟧ᶜ ≡ aProp_to_iProp_deriv der P.
+  Proof.
+    dependent destruction P; cbn.
+    iSplit; by [ iPoseProof (b der) as "[Himp _]" |iPoseProof (b der) as "[_ Himp]" ].
+  Qed.
+
   Coercion aProp_to_FML {b} : aProp b -> cif CON Σ :=
     nola_to_FML ∘ IProp_to_FProp.
 
@@ -104,11 +90,34 @@ Section embedding.
   Coercion aProp_to_ofe_car_func {b} (P : aProp b) : ofe_car_ofunc
     := aProp_to_FML P.
 
-  Lemma sm_to_FML (P : aProp false) : ⟦ P ⟧ᶜ ≡ ↑⟦ P ⟧.
-  Proof.
-    dependent destruction P; cbn.
-    iSplit; by [ iPoseProof (b der) as "[Himp _]" |iPoseProof (b der) as "[_ Himp]" ].
-  Qed.
+End embedding.
+
+Arguments aProp _ _ _ {_} _.
+
+Notation "↑⟦ P ⟧" := (aProp_to_iProp_deriv der P).
+Notation "↑⟦ P ⟧( δ )" := (aProp_to_iProp_deriv δ P).
+
+Section connectives.
+
+  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
+  Local Notation "'aProp'" := (aProp CON JUDG Σ).
+
+  Program Definition aProp_sep {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) : aProp (b₁ || b₂) :=
+    match P, Q with
+    | IProp P, IProp Q => IProp (P ∗ Q)%I
+    | IProp P, FProp Q _ _ => IProp (P ∗ Q der)%I
+    | FProp P _ _, IProp Q => IProp (P der ∗ Q)%I
+    | FProp iP P HP, FProp iQ Q HQ =>
+        FProp (λ δ, iP δ ∗ iQ δ)%I (P ∗ Q)%cif _
+    end.
+  Next Obligation.
+    clear Heq_P Heq_Q.
+    specialize (HP δ); specialize (HQ δ).
+    iSplit;
+      by (iIntros "[HP HQ]";
+       iSplitL "HP";
+       [ iApply HP | iApply HQ ]).
+  Defined.
 
   Program Definition aProp_all {A : Type@{cif_all.u0}} {b : bool} (P : A -> aProp b) : aProp b.
   Proof.
@@ -147,7 +156,7 @@ Section embedding.
   Defined.
 
   Program Definition aProp_wand {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) : aProp (b₁ || b₂) :=
-    match P in aProp b₁, Q in aProp b₂ with
+    match P, Q with
     | IProp P, IProp Q => IProp (P -∗ Q)%I
     | IProp P, FProp Q _ _ => IProp (P -∗ Q der)%I
     | FProp P _ _, IProp Q => IProp (P der -∗ Q)%I
@@ -165,9 +174,7 @@ Section embedding.
   Program Definition aProp_pure (P : Prop) : aProp false :=
     FProp (λ _, ⌜P⌝%I) (cif_pure P) _.
 
-End embedding.
-
-Arguments aProp _ _ _ {_} _.
+End connectives.
 
 Infix "∗" := aProp_sep : aprop_scope.
 Notation "∀ x .. y , Px" :=
@@ -176,10 +183,6 @@ Notation "∃ x .. y , Px" :=
   (aProp_ex (λ x, .. (aProp_ex (λ y, Px%a)) ..)) : aprop_scope.
 Infix "-∗" := aProp_wand : aprop_scope.
 Notation "⌜ φ ⌝" := (aProp_pure φ) : aprop_scope.
-
-
-Notation "↑⟦ P ⟧" := (aProp_to_iProp_deriv der P).
-Notation "↑⟦ P ⟧( δ )" := (aProp_to_iProp_deriv δ P).
 
 From nola.examples Require Import con deriv.
 
@@ -192,9 +195,6 @@ Section inv.
   Set Printing Coercions.
 
   Local Notation "'aProp'" := (aProp CON JUDG Σ).
-
-  Local Coercion aProp_to_iProp {b} (P : aProp b) : iProp Σ :=
-    aProp_to_iProp_deriv der P.
 
   Program Definition ainv_tok {b} N (P : aProp b) : aProp false :=
     FProp (λ δ, inv' δ N P) (cif_inv N P) _.
@@ -314,43 +314,6 @@ Section inv.
     iSpecialize ("Hclose" with "Hinv W").
     iMod "Hclose".
     by iFrame.
-  Qed.
-
-  Lemma sep_frame_l (P P' Q : iProp Σ) :
-    P ≡ P' ->
-    (P ∗ Q)%I ≡ (P' ∗ Q)%I.
-  Proof.
-    iIntros "%HP". rewrite HP. iSplitL; by iIntros.
-  Qed.
-
-  Lemma sep_exist {A} (Ψ Φ : A -> iProp Σ) :
-    (∀ Qx, Ψ Qx ≡ Φ Qx) ->
-    (∃ Qx, Ψ Qx)%I ≡ (∃ Qx, Φ Qx)%I.
-  Proof.
-    iIntros "%HP".
-    iSplit; iIntros "[%Qx HF]"; iExists Qx; by rewrite HP.
-  Qed.
-
-  Lemma sep_forall {A} (Ψ Φ : A -> iProp Σ) :
-    (∀ Qx, Ψ Qx ≡ Φ Qx) ->
-    (∀ Qx, Ψ Qx)%I ≡ (∀ Qx, Φ Qx)%I.
-  Proof.
-    iIntros "%HP".
-    iSplit; iIntros "HF %Qx".
-    - rewrite -(HP Qx). iApply "HF".
-    - rewrite (HP Qx). iApply "HF".
-  Qed.
-
-  Lemma equiv_bi_wand (P Q : iProp Σ) : P ≡ Q -> P ∗-∗ Q.
-  Proof. intros ->. apply bi.wand_iff_refl. Qed.
-
-  Lemma bi_wand_equiv (P Q : iProp Σ) : P ∗-∗ Q -> P ≡ Q.
-  Proof. intros. by iPoseProof H as "H". Qed.
-
-  Lemma der_sound' `{!inJ (cifO CON Σ) JUDG, !inJS (cifO CON Σ) JUDG (iProp Σ)} : ∀ J : ofe_car (cifO CON Σ), ofe_mor_car _ _ der (in_j J) ⊢ ⟦ J ⟧ᶜ(der).
-  Proof.
-    iIntros (J) "Hder". iPoseProof (der_sound with "Hder") as "Hder".
-    erewrite in_js. iApply "Hder".
   Qed.
 
   Lemma inv_iff' {N : namespace} `{!Deriv ih δ} {Px Qx : cif CON Σ} :
