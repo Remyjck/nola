@@ -58,6 +58,13 @@ Section embedding.
     | FProp iP P HP => FProp iP P HP
     end.
 
+  Definition notderiv {b} (p : aProp b) :=
+    match p with
+    | IProp _ => True
+    | FProp iP P HP =>
+      ∃ Q, ∀ δ, iP δ ∗-∗ Q
+    end.
+
   Coercion aProp_to_bi_car {b} (P : aProp b) : bi_car (iProp Σ) :=
     match P with
     | IProp P => P
@@ -102,6 +109,22 @@ Section connectives.
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
   Local Notation "'aProp'" := (aProp CON JUDG Σ).
 
+  Definition aProp_equivalence {b₁ b₂} (P : aProp b₁) (Q : aProp b₂) : iProp Σ :=
+    ⌜b₁ = b₂⌝ ∗ (∀ δ ih, ⌜Deriv ih δ⌝ -∗ ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)).
+
+  (* Lemma aProp_equiv' b1 : Equivalence (@aProp_equivalence b1).
+  Proof.
+    split.
+    - intros P δ.
+      apply bi.wand_iff_refl.
+    - intros P Q Hequiv δ. specialize (Hequiv δ).
+      by iApply util.wand_iff_comm.
+    - intros P Q R HPQ HQR δ.
+      iApply bi.wand_iff_trans. iSplitL.
+      + iApply (HPQ δ).
+      + iApply (HQR δ).
+  Qed. *)
+
   Program Definition aProp_sep {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) : aProp (b₁ || b₂) :=
     match P, Q with
     | IProp P, IProp Q => IProp (P ∗ Q)%I
@@ -118,6 +141,17 @@ Section connectives.
        iSplitL "HP";
        [ iApply HP | iApply HQ ]).
   Defined.
+
+  Lemma notderiv_sep {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) `{notderiv P, notderiv Q}:
+    notderiv (aProp_sep P Q).
+  Proof.
+    dependent destruction P; dependent destruction Q; cbn; try done.
+    destruct notderiv0 as [Qp HP]. destruct notderiv1 as [Qq HQ].
+    exists (Qp ∗ Qq)%I.
+    intros δ. iSplit; iIntros "[HP HQ]";
+      (iSplitL "HP"; [ iApply HP; iApply "HP" | iApply HQ; iApply "HQ" ]).
+  Qed.
+
 
   Program Definition aProp_all {A : Type@{cif_all.u0}} {b : bool} (P : A -> aProp b) : aProp b.
   Proof.
@@ -171,8 +205,24 @@ Section connectives.
     - iPoseProof HP as "[HP→iP _]"; by iApply "HP→iP".
   Defined.
 
+  Lemma notderiv_wand {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) :
+    notderiv P ->
+    notderiv Q ->
+    notderiv (aProp_wand P Q).
+  Proof.
+    intros HP HQ.
+    dependent destruction P; dependent destruction Q; cbn; try done.
+    destruct HP as [Qp HP]. destruct HQ as [Qq HQ].
+    exists (Qp -∗ Qq)%I.
+    intros δ. iSplit; iIntros "Himp HP";
+      iApply HQ; iApply "Himp"; iApply HP; iApply "HP".
+  Qed.
+
   Program Definition aProp_pure (P : Prop) : aProp false :=
     FProp (λ _, ⌜P⌝%I) (cif_pure P) _.
+
+  Lemma notderiv_pure P : notderiv (aProp_pure P).
+  Proof. exists (⌜ P ⌝)%I. intros _. apply bi.wand_iff_refl. Qed.
 
 End connectives.
 
@@ -335,6 +385,49 @@ Section inv.
     iApply util.wand_iff_comm. by iApply "Hequiv".
   Qed.
 
+  Lemma semantic_alteration_equiv' {b} N (P Q : aProp b) :
+    □ aProp_equivalence P Q -∗
+    ainv_tok N P -∗ ainv_tok N Q.
+  Proof.
+    iIntros "[%_ #Hequiv]".
+    unfold ainv_tok; cbn.
+    iIntros "Hinv".
+    iApply (inv'_iff with "[] Hinv").
+    iIntros "!>" (δ' HDeriv _ Hsound).
+    unfold aProp_to_ofe_car.
+    destruct b; dependent destruction P; dependent destruction Q; cbn.
+    - iSplit; iIntros; iNext; by iApply ("Hequiv" $! δ').
+    - iSplit; cbn; iIntros "HP".
+      + iApply b0. iApply ("Hequiv" $! _ _ HDeriv). by iApply b.
+      + iApply b. iApply ("Hequiv" $! _ _ HDeriv). by iApply b0.
+  Qed.
+
+  Lemma semantic_alteration_equiv {b} N (P Q : aProp b) :
+    □ aProp_equivalence P Q -∗
+    ainv_tok N P ∗-∗ ainv_tok N Q.
+  Proof.
+    iIntros "[_ #Hequiv]".
+    iSplit; iApply semantic_alteration_equiv'; (iSplitR; [ iPureIntro; reflexivity | ]);
+      iIntros "%δ %ih %Hder"; [ | rewrite util.wand_iff_comm ];
+      iApply ("Hequiv" $! _ _ Hder).
+  Qed.
+
+  Lemma semantic_alteration_equiv_equiv {b} N (P : aProp b) (Q : aProp b) :
+    (□ aProp_equivalence P Q) -∗
+    aProp_equivalence (ainv_tok N P) (ainv_tok N Q).
+  Proof.
+    iIntros "[%_ #Hequiv]"; iSplit; [ iPureIntro; reflexivity | ].
+    iIntros "%δ %ih %Hder".
+    simpl.
+    iApply inv'_iff'; iIntros "%δ' %Hder' _ _ !>".
+    iSpecialize ("Hequiv" $! _ _ Hder').
+    destruct b; dependent destruction P; dependent destruction Q; cbn.
+    - iSplit; iIntros; iNext; by iApply "Hequiv".
+    - iSplit; iIntros "HP".
+      + iApply b0. iApply ("Hequiv"). by iApply b.
+      + iApply b. iApply ("Hequiv"). by iApply b0.
+  Qed.
+
   Lemma semantic_alteration' {b} N (P Q : aProp b) :
     □ (∀ δ ih, ⌜Deriv ih δ⌝ -∗ ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
     ainv_tok N P -∗ ainv_tok N Q.
@@ -352,6 +445,59 @@ Section inv.
       + iApply b. iApply ("Hequiv" $! δ' _ HDeriv). by iApply b0.
   Qed.
 
+  Lemma exist_intro {A : Type} {b} {Ψ : A → aProp b} (a : A) : Ψ a ⊢ (∃ a0 : A, Ψ a0)%a.
+  Proof.
+    iIntros "HΨ".
+    destruct b; cbn; iExists a;
+      remember (Ψ a) as P;
+      by dependent destruction P.
+  Qed.
+
+  Lemma aProp_equiv_sep_ex {A} {b} (P : A -> aProp b) (Q : A -> aProp b):
+    (∀ a, aProp_equivalence (P a) (Q a)) -∗
+    aProp_equivalence (∃ a, P a)%a (∃ a, Q a)%a.
+  Proof.
+    iIntros "Hequiv".
+    iSplit; [iPureIntro; reflexivity | ]; iIntros "% % %Hder".
+    iSplit; (destruct b; cbn;  iIntros "[%a HP]"; iExists a;
+      iDestruct ("Hequiv" $! a) as "[_ Hequiv]";
+      [ by iApply ("Hequiv" $! _ _ der_Deriv)
+      | by iApply ("Hequiv" $! _ _ Hder) ]).
+  Qed.
+
+  Lemma aProp_equiv_sep_comm {b₁ b₂} (P : aProp b₁) (Q : aProp b₂):
+    ⊢ aProp_equivalence (P ∗ Q)%a (Q ∗ P)%a.
+  Proof.
+    iSplit; [iPureIntro; apply orb_comm | ]; iIntros "% % %HdePr".
+    dependent destruction P;  dependent destruction Q; cbn;
+      rewrite bi.sep_comm; iApply bi.wand_iff_refl.
+  Qed.
+
+  Lemma aProp_equiv_IProp (P Q : aProp true) :
+    P ∗-∗ Q -∗
+    aProp_equivalence P%a Q%a.
+  Proof.
+    iIntros "Hequiv".
+    iSplit; [iPureIntro; reflexivity | ]; iIntros "% % %Hder".
+    dependent destruction P;  dependent destruction Q; cbn; done.
+  Qed.
+
+  Lemma aProp_equiv_notderiv {b} (P Q : aProp b) `{notderiv P, notderiv Q} :
+    P ∗-∗ Q -∗
+    aProp_equivalence P%a Q%a.
+  Proof.
+    iIntros "Hequiv".
+    iSplit; [iPureIntro; reflexivity | ]; iIntros "% % %Hder".
+    dependent destruction P;  dependent destruction Q; cbn; first done.
+    destruct notderiv0 as [Qp HP].
+    destruct notderiv1 as [Qq HQ].
+    iSplit; iIntros "HP".
+    - iApply HQ. iPoseProof (HP with "HP") as "HP".
+      iApply (HQ der). iApply "Hequiv". by iApply HP.
+    - iApply HP. iPoseProof (HQ with "HP") as "HQ".
+      iApply (HP der). iApply "Hequiv". by iApply HQ.
+  Qed.
+
   Lemma semantic_alteration {b} N (P Q : aProp b) :
     □ (∀ δ ih, ⌜Deriv ih δ⌝ -∗ ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
     ainv_tok N P ∗-∗ ainv_tok N Q.
@@ -361,15 +507,25 @@ Section inv.
     iApply ("Hequiv" $! _ _ Hder).
   Qed.
 
-  Lemma commute_under_inv {b₁ b₂} N₁ N₂ (P : aProp b₁) (Q : aProp b₂) :
+  Lemma commute_under_inv {b} N₁ N₂ (P : aProp b) (Q : aProp b) :
     ainv_tok N₁ (ainv_tok N₂ (P ∗ Q)) ∗-∗ ainv_tok N₁ (ainv_tok N₂ (Q ∗ P)).
   Proof.
-    iApply semantic_alteration; iIntros "!> %δ %ih %Hder".
-    simpl.
-    iApply inv_iff; iIntros "%δ' %Hder' !>".
+    iApply semantic_alteration_equiv; iIntros "!>".
+    iApply semantic_alteration_equiv_equiv; iIntros "!>".
+    iApply aProp_equiv_sep_comm.
+  Qed.
+
+  Lemma commute_under_inv_notderiv {b} N₁ N₂ (P Q : aProp b) `{notderiv P, notderiv Q} :
+    ainv_tok N₁ (ainv_tok N₂ (P ∗ Q)) ∗-∗ ainv_tok N₁ (ainv_tok N₂ (Q ∗ P)).
+  Proof.
+    iApply semantic_alteration_equiv; iIntros "!>".
+    iApply semantic_alteration_equiv_equiv; iIntros "!>".
+    iApply aProp_equiv_notderiv.
+    (* Get the following to be inferred *)
+    (* > *) apply notderiv_sep; assumption.
+    (* > *) apply notderiv_sep; assumption.
     dependent destruction P; dependent destruction Q; cbn;
-    rewrite bi.sep_comm;
-    iApply bi.wand_iff_refl.
+      rewrite bi.sep_comm; iApply bi.wand_iff_refl.
   Qed.
 
 End inv.
