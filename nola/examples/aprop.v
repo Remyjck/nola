@@ -58,13 +58,6 @@ Section embedding.
     | FProp iP P HP => FProp iP P HP
     end.
 
-  Definition notderiv {b} (p : aProp b) :=
-    match p with
-    | IProp _ => True
-    | FProp iP P HP =>
-      ∃ Q, ∀ δ, iP δ ∗-∗ Q
-    end.
-
   Coercion aProp_to_bi_car {b} (P : aProp b) : bi_car (iProp Σ) :=
     match P with
     | IProp P => P
@@ -104,6 +97,18 @@ Arguments aProp _ _ _ {_} _.
 Notation "↑⟦ P ⟧" := (aProp_to_iProp_deriv der P).
 Notation "↑⟦ P ⟧( δ )" := (aProp_to_iProp_deriv δ P).
 
+Record NotDeriv `{!Csem CON JUDG Σ} `{!Jsem JUDG (iProp Σ)}
+  {b} (p : aProp CON JUDG Σ b) := NOT_DERIV {
+    not_deriv : match p with
+    | IProp _ => True
+    | FProp iP P HP =>
+      ∃ Q, ∀ δ, iP δ ∗-∗ Q
+    end;
+  }.
+
+Existing Class NotDeriv.
+Arguments NotDeriv {_ _ _ _ _ _} _. Arguments NOT_DERIV {_ _ _ _ _ _} _.
+
 Section connectives.
 
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
@@ -142,16 +147,15 @@ Section connectives.
        [ iApply HP | iApply HQ ]).
   Defined.
 
-  Lemma notderiv_sep {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) `{notderiv P, notderiv Q}:
-    notderiv (aProp_sep P Q).
+  #[export] Instance notderiv_sep {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) `{!NotDeriv P, !NotDeriv Q}:
+    NotDeriv (aProp_sep P Q).
   Proof.
     dependent destruction P; dependent destruction Q; cbn; try done.
-    destruct notderiv0 as [Qp HP]. destruct notderiv1 as [Qq HQ].
-    exists (Qp ∗ Qq)%I.
+    destruct NotDeriv0 as [[Qp HP]]. destruct NotDeriv1 as [[Qq HQ]].
+    constructor. exists (Qp ∗ Qq)%I.
     intros δ. iSplit; iIntros "[HP HQ]";
       (iSplitL "HP"; [ iApply HP; iApply "HP" | iApply HQ; iApply "HQ" ]).
   Qed.
-
 
   Program Definition aProp_all {A : Type@{cif_all.u0}} {b : bool} (P : A -> aProp b) : aProp b.
   Proof.
@@ -205,15 +209,12 @@ Section connectives.
     - iPoseProof HP as "[HP→iP _]"; by iApply "HP→iP".
   Defined.
 
-  Lemma notderiv_wand {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) :
-    notderiv P ->
-    notderiv Q ->
-    notderiv (aProp_wand P Q).
+  #[export] Instance notderiv_wand {b₁ b₂ : bool} (P : aProp b₁) (Q : aProp b₂) `{!NotDeriv P, !NotDeriv Q} :
+    NotDeriv (aProp_wand P Q).
   Proof.
-    intros HP HQ.
     dependent destruction P; dependent destruction Q; cbn; try done.
-    destruct HP as [Qp HP]. destruct HQ as [Qq HQ].
-    exists (Qp -∗ Qq)%I.
+    destruct NotDeriv0 as [[Qp HP]]. destruct NotDeriv1 as [[Qq HQ]].
+    constructor. exists (Qp -∗ Qq)%I.
     intros δ. iSplit; iIntros "Himp HP";
       iApply HQ; iApply "Himp"; iApply HP; iApply "HP".
   Qed.
@@ -221,8 +222,12 @@ Section connectives.
   Program Definition aProp_pure (P : Prop) : aProp false :=
     FProp (λ _, ⌜P⌝%I) (cif_pure P) _.
 
-  Lemma notderiv_pure P : notderiv (aProp_pure P).
-  Proof. exists (⌜ P ⌝)%I. intros _. apply bi.wand_iff_refl. Qed.
+  #[export] Instance notderiv_pure P : NotDeriv (aProp_pure P).
+  Proof.
+    constructor;cbn.
+    exists (⌜ P ⌝)%I. intros _.
+    apply bi.wand_iff_refl.
+  Qed.
 
 End connectives.
 
@@ -242,8 +247,6 @@ Section inv.
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ), !lrustGS_gen hlc Σ,
     !inv'GS (cifOF CON) Σ, !invC CON, !iffJ (cifO CON Σ) JUDG,
     !invCS CON JUDG Σ, !iffJS (cifOF CON) JUDG Σ}.
-
-  Set Printing Coercions.
 
   Local Notation "'aProp'" := (aProp CON JUDG Σ).
 
@@ -466,15 +469,15 @@ Section inv.
     dependent destruction P;  dependent destruction Q; cbn; done.
   Qed.
 
-  Lemma aProp_equiv_notderiv {b} (P Q : aProp b) `{notderiv P, notderiv Q} :
+  Lemma aProp_equiv_notderiv {b} (P Q : aProp b) `{!NotDeriv P, !NotDeriv Q} :
     P ∗-∗ Q -∗
     (P ≡ Q)%a.
   Proof.
     iIntros "Hequiv".
     iSplit; [iPureIntro; reflexivity | ]; iIntros "% % %Hder".
     dependent destruction P;  dependent destruction Q; cbn; first done.
-    destruct notderiv0 as [Qp HP].
-    destruct notderiv1 as [Qq HQ].
+    destruct NotDeriv0 as [[Qp HP]].
+    destruct NotDeriv1 as [[Qq HQ]].
     iSplit; iIntros "HP".
     - iApply HQ. iPoseProof (HP with "HP") as "HP".
       iApply (HQ der). iApply "Hequiv". by iApply HP.
@@ -490,15 +493,12 @@ Section inv.
     iApply aProp_equiv_sep_comm.
   Qed.
 
-  Lemma commute_under_inv_notderiv {b} N₁ N₂ (P Q : aProp b) `{notderiv P, notderiv Q} :
+  Lemma commute_under_inv_notderiv {b} N₁ N₂ (P Q : aProp b) `{!NotDeriv P, !NotDeriv Q} :
     ainv_tok N₁ (ainv_tok N₂ (P ∗ Q)) ∗-∗ ainv_tok N₁ (ainv_tok N₂ (Q ∗ P)).
   Proof.
     iApply semantic_alteration_equiv; iIntros "!>".
     iApply semantic_alteration_equiv_equiv; iIntros "!>".
     iApply aProp_equiv_notderiv.
-    (* Get the following to be inferred *)
-    (* > *) apply notderiv_sep; assumption.
-    (* > *) apply notderiv_sep; assumption.
     dependent destruction P; dependent destruction Q; cbn;
       rewrite bi.sep_comm; iApply bi.wand_iff_refl.
   Qed.
