@@ -233,6 +233,7 @@ Notation "∃ x .. y , Px" :=
   (aProp_ex (λ x, .. (aProp_ex (λ y, Px%a)) ..)) : aprop_scope.
 Infix "-∗" := aProp_wand : aprop_scope.
 Notation "⌜ φ ⌝" := (aProp_pure φ) : aprop_scope.
+Infix "≡" := aProp_equivalence : aprop_scope.
 
 From nola.examples Require Import con deriv.
 
@@ -385,64 +386,47 @@ Section inv.
     iApply util.wand_iff_comm. by iApply "Hequiv".
   Qed.
 
-  Lemma semantic_alteration_equiv' {b} N (P Q : aProp b) :
-    □ aProp_equivalence P Q -∗
+  Lemma semantic_alteration_equiv' {b1 b2} N (P : aProp b1) (Q : aProp b2) :
+    □ (P ≡ Q)%a -∗
     ainv_tok N P -∗ ainv_tok N Q.
   Proof.
-    iIntros "[%_ #Hequiv]".
+    iIntros "[-> #Hequiv]".
     unfold ainv_tok; cbn.
     iIntros "Hinv".
     iApply (inv'_iff with "[] Hinv").
     iIntros "!>" (δ' HDeriv _ Hsound).
     unfold aProp_to_ofe_car.
-    destruct b; dependent destruction P; dependent destruction Q; cbn.
+    destruct b2; dependent destruction P; dependent destruction Q; cbn.
     - iSplit; iIntros; iNext; by iApply ("Hequiv" $! δ').
     - iSplit; cbn; iIntros "HP".
       + iApply b0. iApply ("Hequiv" $! _ _ HDeriv). by iApply b.
       + iApply b. iApply ("Hequiv" $! _ _ HDeriv). by iApply b0.
   Qed.
 
-  Lemma semantic_alteration_equiv {b} N (P Q : aProp b) :
-    □ aProp_equivalence P Q -∗
+  Lemma semantic_alteration_equiv {b1 b2} N (P : aProp b1) (Q : aProp b2) :
+    □ (P ≡ Q)%a -∗
     ainv_tok N P ∗-∗ ainv_tok N Q.
   Proof.
-    iIntros "[_ #Hequiv]".
+    iIntros "[-> #Hequiv]".
     iSplit; iApply semantic_alteration_equiv'; (iSplitR; [ iPureIntro; reflexivity | ]);
       iIntros "%δ %ih %Hder"; [ | rewrite util.wand_iff_comm ];
       iApply ("Hequiv" $! _ _ Hder).
   Qed.
 
-  Lemma semantic_alteration_equiv_equiv {b} N (P : aProp b) (Q : aProp b) :
-    (□ aProp_equivalence P Q) -∗
+  Lemma semantic_alteration_equiv_equiv {b1 b2} N (P : aProp b1) (Q : aProp b2) :
+    □ (P ≡ Q)%a -∗
     aProp_equivalence (ainv_tok N P) (ainv_tok N Q).
   Proof.
-    iIntros "[%_ #Hequiv]"; iSplit; [ iPureIntro; reflexivity | ].
+    iIntros "[-> #Hequiv]"; iSplit; [ iPureIntro; reflexivity | ].
     iIntros "%δ %ih %Hder".
     simpl.
     iApply inv'_iff'; iIntros "%δ' %Hder' _ _ !>".
     iSpecialize ("Hequiv" $! _ _ Hder').
-    destruct b; dependent destruction P; dependent destruction Q; cbn.
+    destruct b2; dependent destruction P; dependent destruction Q; cbn.
     - iSplit; iIntros; iNext; by iApply "Hequiv".
     - iSplit; iIntros "HP".
       + iApply b0. iApply ("Hequiv"). by iApply b.
       + iApply b. iApply ("Hequiv"). by iApply b0.
-  Qed.
-
-  Lemma semantic_alteration' {b} N (P Q : aProp b) :
-    □ (∀ δ ih, ⌜Deriv ih δ⌝ -∗ ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
-    ainv_tok N P -∗ ainv_tok N Q.
-  Proof.
-    iIntros "#Hequiv".
-    unfold ainv_tok; cbn.
-    iIntros "Hinv".
-    iApply (inv'_iff with "[] Hinv").
-    iIntros "!>" (δ' HDeriv _ Hsound).
-    unfold aProp_to_ofe_car.
-    destruct b; dependent destruction P; dependent destruction Q; cbn.
-    - iSplit; iIntros; iNext; by iApply ("Hequiv" $! der _ der_Deriv).
-    - iSplit; cbn; iIntros "HP".
-      + iApply b0. iApply ("Hequiv" $! δ' _ HDeriv). by iApply b.
-      + iApply b. iApply ("Hequiv" $! δ' _ HDeriv). by iApply b0.
   Qed.
 
   Lemma exist_intro {A : Type} {b} {Ψ : A → aProp b} (a : A) : Ψ a ⊢ (∃ a0 : A, Ψ a0)%a.
@@ -454,8 +438,8 @@ Section inv.
   Qed.
 
   Lemma aProp_equiv_sep_ex {A} {b} (P : A -> aProp b) (Q : A -> aProp b):
-    (∀ a, aProp_equivalence (P a) (Q a)) -∗
-    aProp_equivalence (∃ a, P a)%a (∃ a, Q a)%a.
+    (∀ a, (P a ≡ Q a)%a) -∗
+    ((∃ a, P a) ≡ (∃ a, Q a))%a.
   Proof.
     iIntros "Hequiv".
     iSplit; [iPureIntro; reflexivity | ]; iIntros "% % %Hder".
@@ -466,7 +450,7 @@ Section inv.
   Qed.
 
   Lemma aProp_equiv_sep_comm {b₁ b₂} (P : aProp b₁) (Q : aProp b₂):
-    ⊢ aProp_equivalence (P ∗ Q)%a (Q ∗ P)%a.
+    ⊢ ((P ∗ Q)%a ≡ (Q ∗ P)%a)%a.
   Proof.
     iSplit; [iPureIntro; apply orb_comm | ]; iIntros "% % %HdePr".
     dependent destruction P;  dependent destruction Q; cbn;
@@ -475,7 +459,7 @@ Section inv.
 
   Lemma aProp_equiv_IProp (P Q : aProp true) :
     P ∗-∗ Q -∗
-    aProp_equivalence P%a Q%a.
+    (P ≡ Q)%a.
   Proof.
     iIntros "Hequiv".
     iSplit; [iPureIntro; reflexivity | ]; iIntros "% % %Hder".
@@ -484,7 +468,7 @@ Section inv.
 
   Lemma aProp_equiv_notderiv {b} (P Q : aProp b) `{notderiv P, notderiv Q} :
     P ∗-∗ Q -∗
-    aProp_equivalence P%a Q%a.
+    (P ≡ Q)%a.
   Proof.
     iIntros "Hequiv".
     iSplit; [iPureIntro; reflexivity | ]; iIntros "% % %Hder".
@@ -496,15 +480,6 @@ Section inv.
       iApply (HQ der). iApply "Hequiv". by iApply HP.
     - iApply HP. iPoseProof (HQ with "HP") as "HQ".
       iApply (HP der). iApply "Hequiv". by iApply HQ.
-  Qed.
-
-  Lemma semantic_alteration {b} N (P Q : aProp b) :
-    □ (∀ δ ih, ⌜Deriv ih δ⌝ -∗ ↑⟦ P ⟧(δ) ∗-∗ ↑⟦ Q ⟧(δ)) -∗
-    ainv_tok N P ∗-∗ ainv_tok N Q.
-  Proof.
-    iIntros "#Hequiv".
-    iSplit; iApply semantic_alteration'; iIntros "!> %δ %ih %Hder"; [ | iApply util.wand_iff_comm ];
-    iApply ("Hequiv" $! _ _ Hder).
   Qed.
 
   Lemma commute_under_inv {b} N₁ N₂ (P : aProp b) (Q : aProp b) :
