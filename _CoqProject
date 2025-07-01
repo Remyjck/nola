@@ -90,6 +90,8 @@ nola/examples/borrow.v
 nola/examples/mutex.v
 nola/examples/deriv.v
 nola/examples/aprop.v
+nola/examples/own.v
+nola/examples/awp.v
 
 nola/examples/rust_halt/base.v
 nola/examples/rust_halt/type.v

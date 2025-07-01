@@ -1,11 +1,6 @@
-From nola.examples Require Import aprop.
+From nola.examples Require Import aprop con.
 From nola.bi Require Import wpw.
-From nola.examples Require Export con.
-From nola.lrust Require Export notation proofmode.
-
-Import WpwNotation CsemNotation ModwNotation.
-
-About wpw.
+From nola.lrust Require Import proofmode.
 
 Section awp.
 
@@ -15,8 +10,8 @@ Section awp.
 
   Local Notation "'aProp'" := (aProp CON JUDG Σ).
 
-  Definition awp b s E e (Φ : _ -> aProp b) := wpw (inv_wsat ⟦⟧ᶜ) s E e%E (λ v, aProp_to_iProp_deriv der (Φ v)).
-  Definition atwp b s E e (Φ : _ -> aProp b) := twpw (inv_wsat ⟦⟧ᶜ) s E e%E (λ v, aProp_to_iProp_deriv der (Φ v)).
+  Definition awp b s E e (Φ : _ -> aProp b) := wpw (inv_wsat (cif_sem der)) s E e%E (λ v, aProp_to_iProp_deriv der (Φ v)).
+  Definition atwp b s E e (Φ : _ -> aProp b) := twpw (inv_wsat (cif_sem der)) s E e%E (λ v, aProp_to_iProp_deriv der (Φ v)).
 
 
   Lemma atwp_awp {b} s E e (Φ : _ -> aProp b) :
@@ -73,13 +68,7 @@ Section custom_wp.
     Next Obligation (* Proof of non-expansiveness *). done. Qed.
   End customC.
   (** [customC] semantics registered *)
-  (*
-      [inCS : ∀ (CON' CON : cifcon) (JUDG : ofe) Σ,
-        inC CON' CON →
-        Ecsem CON' CON JUDG Σ →
-        Csem CON JUDG Σ → Prop]
-      To be understood as the inclusion of the semantics.
-  *)
+
   Notation customCS := (inCS customCT).
 
   Section customC.
@@ -95,3 +84,50 @@ Section custom_wp.
   End customC.
 
 End custom_wp.
+
+Section aProp_wp.
+  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
+  Context `{!lrustGS_gen hlc Σ}.
+  Context `{!inv'GS (cifOF CON) Σ}.
+  Context `{!inC customCT CON, !inCS customCT CON JUDG Σ}.
+  Local Notation aProp b := (aProp CON JUDG Σ b).
+
+  Program Definition aProp_wp {b} s E e Φ: aProp false :=
+    FProp (λ _, awp b s E e Φ) (cif_wp s E e Φ) _.
+  Next Obligation. intros b s E e Φ δ. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Defined.
+
+  Program Definition aProp_twp {b} s E e Φ : aProp false :=
+    FProp (λ _, atwp b s E e Φ) (cif_twp s E e Φ) _.
+  Next Obligation. intros b s E e Φ δ. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Defined.
+
+End aProp_wp.
+
+From Stdlib Require Import Program.
+
+Section awp.
+  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
+  Context `{!lrustGS_gen hlc Σ}.
+  Context `{!inv'GS (cifOF CON) Σ}.
+  Context `{!inC customCT CON, !inCS customCT CON JUDG Σ}.
+
+  Lemma twp_wp {b} s E e (Φ : _ -> aProp CON JUDG Σ b) :
+    ⊢ (aProp_twp s E e Φ -∗ aProp_wp s E e Φ)%a.
+  Proof.
+    cbn.
+    iIntros "Htwp". iApply (twpw_wpw with "Htwp").
+  Qed.
+
+  Lemma wand_sound {b1 b2} (P : aProp CON JUDG Σ b1) (Q : aProp CON JUDG Σ b2) :
+    (P -∗ Q)%I ∗-∗
+    (P -∗ Q)%a.
+  Proof.
+    dependent destruction P; dependent destruction Q; cbn; iApply bi.wand_iff_refl.
+  Qed.
+
+  Lemma wp_sound {b} s E e (Φ : _ -> aProp CON JUDG Σ b) :
+    wpw (inv_wsat (cif_sem der)) s E e (λ v, aProp_to_iProp_deriv der (Φ v)) ∗-∗ aProp_wp s E e Φ.
+  Proof.
+    cbn; unfold awp. apply bi.wand_iff_refl.
+  Qed.
+
+End awp.

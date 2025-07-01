@@ -503,4 +503,12 @@ Section inv.
       rewrite bi.sep_comm; iApply bi.wand_iff_refl.
   Qed.
 
+  Lemma modus_aponens {b1 b2} (P : aProp b1) (Q : aProp b2) :
+    P -∗ (P -∗ Q)%a -∗ Q.
+  Proof.
+    iIntros "P Himp".
+    dependent destruction P; dependent destruction Q; cbn;
+    by iApply "Himp".
+  Qed.
+
 End inv.
