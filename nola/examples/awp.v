@@ -6,13 +6,12 @@ Section awp.
 
   Context `{!Csem CON JUDG Σ, Jsem JUDG (iProp Σ)}.
   Context `{!lrustGS_gen hlc Σ}.
-  Context `{!inv'GS (cifOF CON) Σ}.
+  Context `{!inv'GS Σ}.
 
   Local Notation "'aProp'" := (aProp CON JUDG Σ).
 
-  Definition awp b s E e (Φ : _ -> aProp b) := wpw (inv_wsat (cif_sem der)) s E e%E (λ v, aProp_to_iProp_deriv der (Φ v)).
-  Definition atwp b s E e (Φ : _ -> aProp b) := twpw (inv_wsat (cif_sem der)) s E e%E (λ v, aProp_to_iProp_deriv der (Φ v)).
-
+  Definition awp b s E e (Φ : _ -> aProp b) := wpw (inv_wsat) s E e%E (λ v, aProp_to_iProp_deriv (Φ v)).
+  Definition atwp b s E e (Φ : _ -> aProp b) := twpw (inv_wsat) s E e%E (λ v, aProp_to_iProp_deriv (Φ v)).
 
   Lemma atwp_awp {b} s E e (Φ : _ -> aProp b) :
     atwp b s E e Φ ⊢ awp b s E e Φ.
@@ -26,7 +25,7 @@ Section custom_wp.
 
   Context `{!Csem CON JUDG Σ, Jsem JUDG (iProp Σ)}.
   Context `{!lrustGS_gen hlc Σ}.
-  Context `{!inv'GS (cifOF CON) Σ}.
+  Context `{!inv'GS Σ}.
 
   (** ** Custom constructors *)
 
@@ -76,10 +75,10 @@ Section custom_wp.
 
     (** Reify token *)
     #[export] Program Instance wp_as_cif {b} s E e Φ :
-        AsCif CON (λ _, awp b s E e Φ)%I := AS_CIF (cif_wp s E e Φ) _.
+        AsCif CON (λ _, @awp CON JUDG _ _ _ _ _ _ b s E e Φ)%I := AS_CIF (cif_wp s E e Φ) _.
     Next Obligation. move=>/= >. by rewrite sem_cif_in. Qed.
     #[export] Program Instance twp_as_cif {b} s E e Φ :
-        AsCif CON (λ _, atwp b s E e Φ)%I := AS_CIF (cif_twp s E e Φ) _.
+        AsCif CON (λ _, @atwp CON JUDG _ _ _ _ _ _ b s E e Φ)%I := AS_CIF (cif_twp s E e Φ) _.
     Next Obligation. move=>/= >. by rewrite sem_cif_in. Qed.
   End customC.
 
@@ -88,17 +87,17 @@ End custom_wp.
 Section aProp_wp.
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
   Context `{!lrustGS_gen hlc Σ}.
-  Context `{!inv'GS (cifOF CON) Σ}.
+  Context `{!inv'GS Σ}.
   Context `{!inC customCT CON, !inCS customCT CON JUDG Σ}.
   Local Notation aProp b := (aProp CON JUDG Σ b).
 
   Program Definition aProp_wp {b} s E e Φ: aProp false :=
-    FProp (λ _, awp b s E e Φ) (cif_wp s E e Φ) _.
-  Next Obligation. intros b s E e Φ δ. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Defined.
+    FProp (awp b s E e Φ) (cif_wp s E e Φ) _.
+  Next Obligation. intros b s E e Φ. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Defined.
 
   Program Definition aProp_twp {b} s E e Φ : aProp false :=
-    FProp (λ _, atwp b s E e Φ) (cif_twp s E e Φ) _.
-  Next Obligation. intros b s E e Φ δ. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Defined.
+    FProp (atwp b s E e Φ) (cif_twp s E e Φ) _.
+  Next Obligation. intros b s E e Φ. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Defined.
 
 End aProp_wp.
 
@@ -107,7 +106,7 @@ From Stdlib Require Import Program.
 Section awp.
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
   Context `{!lrustGS_gen hlc Σ}.
-  Context `{!inv'GS (cifOF CON) Σ}.
+  Context `{!inv'GS Σ}.
   Context `{!inC customCT CON, !inCS customCT CON JUDG Σ}.
 
   Lemma twp_wp {b} s E e (Φ : _ -> aProp CON JUDG Σ b) :
@@ -125,7 +124,7 @@ Section awp.
   Qed.
 
   Lemma wp_sound {b} s E e (Φ : _ -> aProp CON JUDG Σ b) :
-    wpw (inv_wsat (cif_sem der)) s E e (λ v, aProp_to_iProp_deriv der (Φ v)) ∗-∗ aProp_wp s E e Φ.
+    wpw (inv_wsat) s E e (λ v, aProp_to_iProp_deriv (Φ v)) ∗-∗ aProp_wp s E e Φ.
   Proof.
     cbn; unfold awp. apply bi.wand_iff_refl.
   Qed.

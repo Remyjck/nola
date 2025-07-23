@@ -9,7 +9,7 @@ Import iPropAppNotation ModwNotation CsemNotation.
 Implicit Type FML : oFunctor.
 
 Section store.
-  Context `{!dinvGS (cifOF CON) Σ, tokenG Σ, !Csem CON JUDG Σ}.
+  Context `{!dinvGS Σ, tokenG Σ, !Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
   Implicit Type Px : cif CON Σ.
 
   (** [store_tok]: Exclusive stored proposition token *)
@@ -27,16 +27,16 @@ Section store.
   Proof. apply ne_proper, _. Qed.
 
   (** Allocate [store_tok] *)
-  Lemma store_tok_alloc {δ} Px : ⟦ Px ⟧ᶜ(δ) =[dinv_wsat ⟦⟧ᶜ(δ)]=∗ store_tok Px.
+  Lemma store_tok_alloc Px : ⟦ Px ⟧ᶜ =[dinv_wsat id]=∗ store_tok Px.
   Proof.
     rewrite store_tok_unseal. iIntros "Px W". iMod token_alloc as (γ) "$".
-    iMod (dinv_tok_alloc_suspend (FML:=cifOF _) (Px ∨ ▷ token γ)%cif
+    iMod (dinv_tok_alloc_suspend (Px ∨ ▷ token γ)%cif
       with "W") as "/=[$ cl]".
     iModIntro. iApply "cl". iFrame.
   Qed.
 
   (** Access the content of [store_tok] *)
-  Lemma store_tok_acc {δ} Px : store_tok Px -∗[dinv_wsat ⟦⟧ᶜ(δ)]◇ ⟦ Px ⟧ᶜ(δ).
+  Lemma store_tok_acc Px : store_tok Px -∗[dinv_wsat id]◇ ⟦ Px ⟧ᶜ.
   Proof.
     rewrite store_tok_unseal. iIntros "[%[t i]] W".
     iDestruct (dinv_tok_acc with "i W") as "/=[[$|>t'] →W]"; last first.

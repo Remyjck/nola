@@ -8,7 +8,7 @@ Import ProdNotation FunPRNotation ModwNotation WpwNotation CsemNotation
 Section borrow.
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ), !lrustGS_gen hlc Σ,
     !borrowGS (cifOF CON) Σ, !bor_tokC CON, !bor_tokCS CON JUDG Σ,
-    !inv'GS (cifOF CON) Σ, !inv_tokC CON, !inv_tokCS CON JUDG Σ}.
+    !inv'GS Σ, !inv_tokC CON, !inv_tokCS CON JUDG Σ}.
   Implicit Type l : loc.
 
   (** Dereference a nested mutable reference *)
@@ -36,7 +36,7 @@ Section borrow.
   (** Load from an immutable shared borrow *)
   Lemma imbor_load {l α q} {n : Z} :
     [[{ q.[α] ∗ inv_tok nroot (cif_bor_tok α (▷ l ↦ #n)) }]]
-      [inv_wsat ⟦⟧ᶜ ∗ borrow_wsat bupd ⟦⟧ᶜ]
+      [inv_wsat ∗ borrow_wsat bupd ⟦⟧ᶜ]
       !ˢᶜ#l
     [[{ RET #n; q.[α] }]].
   Proof.

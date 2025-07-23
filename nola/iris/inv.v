@@ -12,21 +12,23 @@ Import iPropAppNotation ModwNotation WpwNotation.
 Implicit Type (FML : oFunctor) (i : positive) (N : namespace).
 
 (** Ghost state for invariants *)
-Class inv'GpreS FML Σ : Type := inv'GpreS_sinv : sinvGpreS FML Σ.
+Class inv'GpreS Σ : Type := inv'GpreS_sinv : sinvGpreS Σ.
 Local Existing Instance inv'GpreS_sinv.
-Class inv'GS FML Σ : Type := inv'GS_sinv : sinvGS FML Σ.
+Class inv'GS Σ : Type := inv'GS_sinv : sinvGS Σ.
 Local Existing Instance inv'GS_sinv.
-Definition inv'Σ FML `{!oFunctorContractive FML} := sinvΣ FML.
+Definition inv'Σ := sinvΣ.
 #[export] Instance subG_inv'Σ
-  `{!oFunctorContractive FML, !subG (inv'Σ FML) Σ} : inv'GpreS FML Σ.
+  `{!subG (inv'Σ Σ) Σ} : inv'GpreS Σ.
 Proof. solve_inG. Qed.
 
 Section inv.
-  Context `{!inv'GS FML Σ, !invGS_gen hlc Σ}.
-  Implicit Type (Px : FML $oi Σ) (sm : FML $oi Σ -d> iProp Σ).
+  Context `{!inv'GS Σ, !invGS_gen hlc Σ, !Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
+  Implicit Type (Px : cif CON Σ).
+
+  Import CsemNotation.
 
   (** [inv_tok]: Invariant token *)
-  Local Definition inv_tok_def (N : namespace) (Px : FML $oi Σ) : iProp Σ :=
+  Local Definition inv_tok_def (N : namespace) Px : iProp Σ :=
     ∃ i, ⌜i ∈ (↑N:coPset)⌝ ∧ sinv_tok i Px.
   Local Definition inv_tok_aux : seal inv_tok_def. Proof. by eexists. Qed.
   Definition inv_tok := inv_tok_aux.(unseal).
@@ -42,7 +44,7 @@ Section inv.
   #[export] Instance inv_tok_persistent {N Px} : Persistent (inv_tok N Px).
   Proof. rewrite inv_tok_unseal. exact _. Qed.
   (** [inv_tok] is timeless for discrete formulas *)
-  #[export] Instance inv_tok_timeless `{!Discrete Px} {N} :
+  #[export] Instance inv_tok_timeless `{!Discrete ⟦Px⟧ᶜ} {N} :
     Timeless (inv_tok N Px).
   Proof. rewrite inv_tok_unseal. exact _. Qed.
 
@@ -52,39 +54,38 @@ Section inv.
   Proof. rewrite inv_tok_unseal=> ?. iIntros "[%[% $]] !%". set_solver. Qed.
 
   (** Semantics *)
-  Local Definition inv_sem sm i Px : iProp Σ :=
-    sm Px ∗ ownD {[i]} ∨ ownE {[i]}.
+  Local Definition inv_sem i P : iProp Σ :=
+    P ∗ ownD {[i]} ∨ ownE {[i]}.
   (** [inv_sem sm] is non-expansive when [sm] is *)
-  Local Lemma inv_sem_ne {sm} :
-    internal_ne sm ⊢@{iProp Σ} ∀ i, internal_ne (inv_sem sm i).
+  Local Lemma inv_sem_ne :
+   ⊢@{iProp Σ} ∀ i, internal_ne (inv_sem i).
   Proof.
-    iIntros "#Ne" (???) "≡". unfold inv_sem. by iRewrite ("Ne" with "≡").
+    iIntros (???) "≡". unfold inv_sem. by iRewrite ("≡").
   Qed.
   (** [inv_sem sm] is always timeless when [sm] is *)
-  Local Instance inv_sem_timeless `{!∀ Px, Timeless (sm Px)} {i Px} :
-    Timeless (inv_sem sm i Px).
+  Local Instance inv_sem_timeless `{!∀ (P : iProp Σ), Timeless (P)} {i P} :
+    Timeless (inv_sem i P).
   Proof. unfold inv_sem, ownD, ownE. exact _. Qed.
 
   (** World satisfaction *)
-  Local Definition inv_wsat_def sm : iProp Σ := sinv_wsat (inv_sem sm).
+  Local Definition inv_wsat_def : iProp Σ := sinv_wsat inv_sem.
   Local Definition inv_wsat_aux : seal inv_wsat_def. Proof. by eexists. Qed.
   Definition inv_wsat := inv_wsat_aux.(unseal).
   Local Lemma inv_wsat_unseal : inv_wsat = inv_wsat_def.
   Proof. exact: seal_eq. Qed.
 
   (** [inv_wsat] is non-expansive *)
-  #[export] Instance inv_wsat_ne : NonExpansive inv_wsat.
-  Proof. rewrite inv_wsat_unseal /inv_wsat_def /inv_sem. solve_proper. Qed.
-  #[export] Instance inv_wsat_proper : Proper ((≡) ==> (≡)) inv_wsat.
-  Proof. apply ne_proper, _. Qed.
+  (* #[export] Instance inv_wsat_ne : NonExpansive inv_wsat.
+  Proof. rewrite inv_wsat_unseal /inv_wsat_def /inv_sem. solve_proper. Qed. *)
+  (* #[export] Instance inv_wsat_proper : Proper ((≡) ==> (≡)) inv_wsat.
+  Proof. apply ne_proper, _. Qed. *)
 
   (** [inv_wsat] is timeless if [sm] is always timeless
     and the underlying ofe is discrete *)
-  #[export] Instance inv_wsat_timeless
+  (* #[export] Instance inv_wsat_timeless
     `{!OfeDiscrete (FML $oi Σ), !∀ Px, Timeless (sm Px)} :
-    Timeless (inv_wsat sm).
-  Proof. rewrite inv_wsat_unseal. exact _. Qed.
-
+    Timeless (inv_wsat).
+  Proof. rewrite inv_wsat_unseal. exact _. Qed. *)
   (** Allocate [ownD] *)
   Lemma alloc_ownD (I : gset positive) N :
     ⊢ |==> ∃ i, ⌜i ∉ I⌝ ∧ ⌜i ∈ (↑N:coPset)⌝ ∧ ownD {[i]}.
@@ -97,7 +98,6 @@ Section inv.
       by exists i. }
     iDestruct "X" as %[i[->[??]]]. iModIntro. iExists i. iSplit; by [|iSplit].
   Qed.
-
   (** Access [ownE] *)
   Local Lemma ownE_subset {E F} : F ⊆ E → ownE E ⊣⊢ ownE F ∗ ownE (E∖F).
   Proof.
@@ -120,8 +120,8 @@ Section inv.
   Qed.
 
   (** Allocate [inv_tok] suspending the world satisfaction *)
-  Lemma inv_tok_alloc_suspend {sm} Px N :
-    inv_wsat sm ==∗ inv_tok N Px ∗ (sm Px -∗ inv_wsat sm).
+  Lemma inv_tok_alloc_suspend Px N :
+    inv_wsat ==∗ inv_tok N Px ∗ (⟦Px⟧ᶜ -∗ inv_wsat).
   Proof.
     rewrite inv_tok_unseal inv_wsat_unseal. iIntros "W".
     iDestruct (sinv_tok_alloc_suspend Px with "W") as (I) "big".
@@ -130,16 +130,17 @@ Section inv.
     iFrame.
   Qed.
   (** Allocate [inv_tok] *)
-  Lemma inv_tok_alloc {sm} Px N : sm Px =[inv_wsat sm]=∗ inv_tok N Px.
+  Lemma inv_tok_alloc Px N : ⟦Px⟧ᶜ =[inv_wsat]=∗ inv_tok N Px.
   Proof.
     iIntros "? W". iMod (inv_tok_alloc_suspend with "W") as "[$ →W]". iModIntro.
     by iApply "→W".
+    Unshelve.
   Qed.
 
   (** Allocate [inv_tok] before storing the content *)
-  Lemma inv_tok_alloc_open {sm E} Px N : ↑N ⊆ E →
-    ⊢ |=[inv_wsat sm]{E, E∖↑N}=> inv_tok N Px ∗
-      (sm Px =[inv_wsat sm]{E∖↑N, E}=∗ True).
+  Lemma inv_tok_alloc_open {E} Px N : ↑N ⊆ E →
+    ⊢ |=[inv_wsat]{E, E∖↑N}=> inv_tok N Px ∗
+      (⟦Px⟧ᶜ =[inv_wsat]{E∖↑N, E}=∗ True).
   Proof.
     rewrite inv_tok_unseal inv_wsat_unseal=> NE. iIntros "W".
     iDestruct (sinv_tok_alloc_suspend Px with "W") as (I) "big".
@@ -155,9 +156,9 @@ Section inv.
   Qed.
 
   (** Access using [inv_tok] *)
-  Lemma inv_tok_acc {sm N E Px} : ↑N ⊆ E →
-    inv_tok N Px =[inv_wsat sm]{E,E∖↑N}=∗
-      sm Px ∗ (sm Px =[inv_wsat sm]{E∖↑N,E}=∗ True).
+  Lemma inv_tok_acc {N E Px} : ↑N ⊆ E →
+    inv_tok N Px =[inv_wsat]{E,E∖↑N}=∗
+      ⟦Px⟧ᶜ ∗ (⟦Px⟧ᶜ =[inv_wsat]{E∖↑N,E}=∗ True).
   Proof.
     rewrite inv_tok_unseal inv_wsat_unseal=> NE. iIntros "[%i[%iN #sm]] W".
     iMod (fupd_ownE_acc_in iN NE) as "[i cl]".
@@ -171,32 +172,47 @@ Section inv.
     iLeft. iFrame.
   Qed.
   (** Access using [inv_tok] via view shift, for presentation *)
-  Lemma inv_tok_acc_vs {sm N Px E Q R} : ↑N ⊆ E →
-    □ (sm Px -∗ Q =[inv_wsat sm]{E∖↑N}=∗ sm Px ∗ R) -∗
-      □ (inv_tok N Px -∗ Q =[inv_wsat sm]{E}=∗ R).
+  Lemma inv_tok_acc_vs {N Px E Q R} : ↑N ⊆ E →
+    □ (⟦Px⟧ᶜ -∗ Q =[inv_wsat]{E∖↑N}=∗ ⟦Px⟧ᶜ ∗ R) -∗
+      □ (inv_tok N Px -∗ Q =[inv_wsat]{E}=∗ R).
   Proof.
     iIntros (?) "#vs !> i Q". iMod (inv_tok_acc with "i") as "[Px cl]"; [done|].
     iMod ("vs" with "Px Q") as "[Px $]". by iApply "cl".
   Qed.
 
   (** Access using [inv_tok] for persistent propositions *)
-  Lemma inv_tok_acc_persistent {sm N Px E} : Persistent (sm Px) → ↑N ⊆ E →
-    inv_tok N Px =[inv_wsat sm]{E}=∗ sm Px.
+  Lemma inv_tok_acc_persistent {N Px E} : Persistent (⟦Px⟧ᶜ) → ↑N ⊆ E →
+    inv_tok N Px =[inv_wsat]{E}=∗ ⟦Px⟧ᶜ.
   Proof.
     iIntros (??) "i". iMod (inv_tok_acc with "i") as "[#Px cl]"; [done|].
     iFrame "Px". by iApply "cl".
   Qed.
+
+  Lemma sem_alteration {N Px Qx} :
+    (⟦ Px ⟧ᶜ ∗-∗ ⟦ Qx ⟧ᶜ) ->
+    inv_tok N Px ∗-∗ inv_tok N Qx.
+  Proof.
+    intros Heq.
+    rewrite inv_tok_unseal /inv_tok_def.
+    iSplit; iIntros "(%i & %Hin & Hinv)";
+      iExists i; iFrame "%"; by iApply (sem_alteration Heq).
+  Qed.
 End inv.
 
 Section inv_wp.
-  Context `{!inv'GS FML Σ, !iris'GS_gen hlc Λ Σ}.
+  Context `{!inv'GS Σ, !iris'GS_gen hlc Λ Σ}.
+
+  Import CsemNotation.
+
+  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ)}.
+  Implicit Type (Px : cif CON Σ).
 
   (** Access using [inv_tok] via [twp], for presentation *)
   Lemma inv_tok_acc_twp `{!Atomic (stuckness_to_atomicity s) e}
-    {sm N Px E Q Ψ} :
+    {N Px E Q Ψ} :
     ↑N ⊆ E → to_val e = None →
-    [[{ sm Px ∗ Q }]][inv_wsat sm] e @ s; E∖↑N [[{ v, RET v; sm Px ∗ Ψ v }]] -∗
-      [[{ inv_tok N Px ∗ Q }]][inv_wsat sm] e @ s; E [[{ v, RET v; Ψ v }]].
+    [[{ ⟦Px⟧ᶜ ∗ Q }]][inv_wsat] e @ s; E∖↑N [[{ v, RET v; ⟦Px⟧ᶜ ∗ Ψ v }]] -∗
+      [[{ inv_tok N Px ∗ Q }]][inv_wsat] e @ s; E [[{ v, RET v; Ψ v }]].
   Proof.
     iIntros (??) "#twp %Φ !> [i Q] →Φ".
     iMod (inv_tok_acc with "i") as "[Px cl]"; [done..|].
@@ -206,9 +222,9 @@ Section inv_wp.
 End inv_wp.
 
 (** Allocate [inv_wsat] *)
-Lemma inv_wsat_alloc `{!inv'GpreS FML Σ, !invGS_gen hlc Σ} :
-  ⊢ |==> ∃ _ : inv'GS FML Σ, ∀ sm, internal_ne sm -∗ inv_wsat sm.
+Lemma inv_wsat_alloc `{!inv'GpreS Σ, !invGS_gen hlc Σ} :
+  ⊢ |==> ∃ _ : inv'GS Σ, inv_wsat.
 Proof.
-  iMod sinv_wsat_alloc as (?) "W". iModIntro. iExists _. iIntros (?) "Ne".
-  rewrite inv_wsat_unseal. iApply "W". iApply (inv_sem_ne with "Ne").
+  iMod sinv_wsat_alloc as (?) "W". iModIntro. iExists _.
+  rewrite inv_wsat_unseal. iApply "W". iApply inv_sem_ne.
 Qed.

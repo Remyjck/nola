@@ -75,7 +75,7 @@ Section aProp_own.
 
   Program Definition aProp_own `{inG Σ A, customC A CON, !customCS A CON JUDG Σ}
     γ (a : A) : aProp false :=
-    FProp (λ _, own γ a)%I (cif_own γ a)%cif _.
+    FProp (own γ a)%I (cif_own γ a)%cif _.
   Next Obligation. intros. rewrite sem_cif_in /=. apply bi.wand_iff_refl. Qed.
 
   (* Context `{!inG Σ (authR max_natUR), customC (authR max_natUR) CON, !customCS (authR max_natUR) CON JUDG Σ}. *)

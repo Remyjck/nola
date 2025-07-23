@@ -7,7 +7,7 @@ Import ProeqvNotation FunPRNotation ModwNotation WpwNotation CsemNotation.
 
 Section ilist.
   Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ), !lrustGS_gen hlc Σ,
-    !inv'GS (cifOF CON) Σ, !inv_tokC CON, !inv_tokCS CON JUDG Σ}.
+    !inv'GS Σ, !inv_tokC CON, !inv_tokCS CON JUDG Σ}.
   Implicit Type (Px Qx : cif CON Σ) (Φx Ψx : loc → cif CON Σ) (l : loc).
 
   (** ** Linked list *)
@@ -64,26 +64,26 @@ Section ilist.
 
   (** Turn cyclic references into [ilist] *)
   Lemma twp_new_ilist_cyclic {N N' E Φx l} : ↑N' ⊆ E →
-    inv_tok N (Φx l) -∗ (l +ₗ 1) ↦ #l =[inv_wsat ⟦⟧ᶜ]{E}=∗ ilist N N' Φx l.
+    inv_tok N (Φx l) -∗ (l +ₗ 1) ↦ #l =[inv_wsat]{E}=∗ ilist N N' Φx l.
   Proof.
     iIntros (?) "#$ ↦". iMod inv_tok_alloc_open as "[#$ cl]"=>//=. iApply "cl".
     iExists _. iFrame "↦". rewrite sem_ilist. by iSplit.
   Qed.
   Lemma twp_new_ilist_cyclic2 {N N' E Φx l l'} : ↑N' ⊆ E →
-    inv_tok N (Φx l) -∗ inv_tok N (Φx l') -∗ (l +ₗ 1) ↦ #l' -∗ (l' +ₗ 1) ↦ #l
-      =[inv_wsat ⟦⟧ᶜ]{E}=∗ ilist N N' Φx l ∗ ilist N N' Φx l'.
+    @inv_tok _ _ CON JUDG _ _ N (Φx l) -∗ inv_tok N (Φx l') -∗ (l +ₗ 1) ↦ #l' -∗ (l' +ₗ 1) ↦ #l
+      =[inv_wsat]{E}=∗ ilist N N' Φx l ∗ ilist N N' Φx l'.
   Proof.
     iIntros (?) "#$ #$ ↦ ↦'".
-    iMod (inv_tok_alloc_open _ (N'.@ 0)) as "[#l cl]"; [solve_ndisj|].
-    iMod (inv_tok_alloc_open _ (N'.@ 1)) as "[#l' cl']"; [solve_ndisj|].
-    rewrite !(inv_tok_subset (N:=_.@_)); [iFrame "l l'"|solve_ndisj..]=>/=.
+    iMod (@inv_tok_alloc_open _ _ _ _ CON JUDG _ _ _ _ (N'.@ 0)) as "[#l cl]"; [solve_ndisj|].
+    iMod (@inv_tok_alloc_open _ _ _ _ CON JUDG _ _ _ _ (N'.@ 1)) as "[#l' cl']"; [solve_ndisj|].
+    rewrite !(inv_tok_subset (N := _.@_)); [iFrame "l l'"|solve_ndisj..]=>/=.
     iMod ("cl'" with "[$↦']"); [|iApply "cl"; iFrame "↦"]; rewrite sem_ilist;
       by iSplit.
   Qed.
 
   (** Construct [ilist] from the head and tail *)
   Lemma twp_new_ilist_cons {N N' Φx l l'} :
-    inv_tok N (Φx l) -∗ (l +ₗ 1) ↦ #l' -∗ ilist N N' Φx l' =[inv_wsat ⟦⟧ᶜ]=∗
+    inv_tok N (Φx l) -∗ (l +ₗ 1) ↦ #l' -∗ ilist N N' Φx l' =[inv_wsat]=∗
       ilist N N' Φx l.
   Proof.
     iIntros "$ ↦ ?". iApply inv_tok_alloc=>/=. iFrame "↦". by rewrite sem_ilist.
@@ -92,7 +92,7 @@ Section ilist.
   (** Access the tail of a list *)
   Definition tail_ilist : val := λ: ["l"], !ˢᶜ("l" +ₗ #1).
   Lemma twp_tail_list {N N' E Φx l} : ↑N ⊆ E → ↑N' ⊆ E →
-    [[{ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ ilist N N' Φx l }]][inv_wsat]
       tail_ilist [ #l] @ E [[{ l', RET #l'; ilist N N' Φx l' }]].
   Proof.
     iIntros (?? Ψ) "/= [_ #itl] →Ψ". wp_rec. wp_op.
@@ -107,9 +107,9 @@ Section ilist.
     if:: !"c" > #0 then
       "f" ["l"];; "c" <- !"c" - #1;; "self" ["f"; "c"; tail_ilist ["l"]].
   Lemma twp_iter_ilist {N N' E Φx c l} {f : val} {n : nat} : ↑N ⊆ E → ↑N' ⊆ E →
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l'] @ E
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l'] @ E
       [[{ v, RET v; True }]]) -∗
-    [[{ c ↦ #n ∗ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ c ↦ #n ∗ ilist N N' Φx l }]][inv_wsat]
       iter_ilist [f; #c; #l] @ E [[{ RET #☠; c ↦ #0 }]].
   Proof.
     iIntros "%% #f" (Ψ) "!> [c↦ #l] →Ψ".
@@ -126,9 +126,9 @@ Section ilist.
     Fork (iter_ilist ["f"; "c"; "l"]);; iter_ilist ["f"; "c'"; "l"].
   Lemma twp_fork2_iter_ilist {N N' E Φx c c' l} {f : val} {m n : nat} :
     ↑N ⊆ E → ↑N' ⊆ E →
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l'] @ E
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l'] @ E
       [[{ v, RET v; True }]]) -∗
-    [[{ c ↦ #m ∗ c' ↦ #n ∗ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ c ↦ #m ∗ c' ↦ #n ∗ ilist N N' Φx l }]][inv_wsat]
       fork2_iter_ilist [f; #c; #c'; #l] @ E [[{ RET #☠; c' ↦ #0 }]].
   Proof.
     iIntros "%% #f" (Ψ) "!> (↦ & ↦' & #l) →Ψ". wp_rec.
@@ -145,9 +145,9 @@ Section ilist.
       Fork (let: "c" := Alloc #1 in "c" <- Ndnat;; iter_ilist ["f"; "c"; "l"]);;
       "k" <- !"k" - #1;; "self" ["f"; "k"; "l"].
   Lemma twp_forks_iter_ilist {N N' E Φx k l} {f : val} {n : nat} :
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l']
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l']
       [[{ v, RET v; True }]]) -∗
-    [[{ k ↦ #n ∗ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ k ↦ #n ∗ ilist N N' Φx l }]][inv_wsat]
       forks_iter_ilist [f; #k; #l] @ E [[{ RET #☠; k ↦ #0 }]].
   Proof.
     iIntros "#f" (Ψ) "!> [↦ #l] →Ψ".
@@ -163,9 +163,9 @@ Section ilist.
   Definition nd_forks_iter_ilist : val := λ: ["f"; "l"],
     let: "k" := Alloc #1 in "k" <- Ndnat;; forks_iter_ilist ["f"; "k"; "l"].
   Lemma twp_nd_forks_iter_ilist {N N' E Φx l} {f : val} :
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l']
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l']
       [[{ v, RET v; True }]]) -∗
-    [[{ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ ilist N N' Φx l }]][inv_wsat]
       nd_forks_iter_ilist [f; #l] @ E [[{ RET #☠; True }]].
   Proof.
     iIntros "#f" (Ψ) "!> #l →Ψ". wp_rec. wp_alloc k as "↦" "†".
@@ -186,9 +186,9 @@ Section ilist.
       "self" ["f"; "c"; "c'"; tail_ilist ["l"]].
   Lemma twp_iter2_ilist {N N' E Φx c c' l} {f : val} {m n : nat} :
     ↑N ⊆ E → ↑N' ⊆ E →
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l'] @ E
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l'] @ E
       [[{ v, RET v; True }]]) -∗
-    [[{ c ↦ #m ∗ c' ↦ #n ∗ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ c ↦ #m ∗ c' ↦ #n ∗ ilist N N' Φx l }]][inv_wsat]
       iter2_ilist [f; #c; #c'; #l] @ E [[{ RET #☠; c ↦ #0 ∗ c' ↦ #0 }]].
   Proof.
     iIntros "%% #f" (Ψ) "!> (↦ & ↦' & #l) →Ψ".
@@ -210,9 +210,9 @@ Section ilist.
         "c'" <- Ndnat;; iter2_ilist ["f"; "c"; "c'"; "l"]);;
       "k" <- !"k" - #1;; "self" ["f"; "k"; "l"].
   Lemma twp_forks_iter2_ilist {N N' E Φx k l} {f : val} {n : nat} :
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l']
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l']
       [[{ v, RET v; True }]]) -∗
-    [[{ k ↦ #n ∗ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ k ↦ #n ∗ ilist N N' Φx l }]][inv_wsat]
       forks_iter2_ilist [f; #k; #l] @ E [[{ RET #☠; k ↦ #0 }]].
   Proof.
     iIntros "#f" (Ψ) "!> [↦ #l] →Ψ".
@@ -230,9 +230,9 @@ Section ilist.
   Definition nd_forks_iter2_ilist : val := λ: ["f"; "l"],
     let: "k" := Alloc #1 in "k" <- Ndnat;; forks_iter2_ilist ["f"; "k"; "l"].
   Lemma twp_nd_forks_iter2_ilist {N N' E Φx l} {f : val} :
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l']
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l']
       [[{ v, RET v; True }]]) -∗
-    [[{ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ ilist N N' Φx l }]][inv_wsat]
       nd_forks_iter2_ilist [f; #l] @ E [[{ RET #☠; True }]].
   Proof.
     iIntros "#f" (Ψ) "!> #l →Ψ". wp_rec. wp_alloc k as "↦" "†".
@@ -248,11 +248,11 @@ Section ilist.
     if:: "s" ["c"] then "f" ["l"];; "self" ["f"; "s"; "c"; tail_ilist ["l"]].
   Lemma twp_iterst_ilist {N N' E Φx l A Rel Ω P a} {f s c : val} :
     @Acc A Rel a → ↑N ⊆ E → ↑N' ⊆ E →
-    (∀ a, [[{ Ω a }]][inv_wsat ⟦⟧ᶜ] s [c] @ E
+    (∀ a, [[{ Ω a }]][inv_wsat] s [c] @ E
       [[{ (b : bool), RET #b; if b then ∃ a', ⌜Rel a' a⌝ ∗ Ω a' else P }]]) -∗
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l'] @ E
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l'] @ E
       [[{ v, RET v; True }]]) -∗
-    [[{ Ω a ∗ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ Ω a ∗ ilist N N' Φx l }]][inv_wsat]
       iterst_ilist [f; s; c; #l] @ E [[{ RET #☠; P }]].
   Proof.
     iIntros "%Acc %% #s #f" (Ψ) "!> [Ω #l] →Ψ".
@@ -272,7 +272,7 @@ Section ilist.
   Definition pred_step2 (c : loc) (mn : nat * nat) : iProp Σ :=
     c ↦ #mn.1 ∗ (c +ₗ 1) ↦ #mn.2.
   Lemma twp_step2 {E c mn} :
-    [[{ pred_step2 c mn }]][inv_wsat ⟦⟧ᶜ]
+    [[{ pred_step2 c mn }]][inv_wsat]
       step2 [ #c] @ E
     [[{ (b : bool), RET #b; if b then ∃ mn', ⌜lexico mn' mn⌝ ∗ pred_step2 c mn'
           else c ↦ #0 ∗ (c +ₗ 1) ↦ #0 }]].
@@ -289,9 +289,9 @@ Section ilist.
   Qed.
   Lemma twp_iterst_ilist_step2 {N N' E Φx l mn c} {f : val} :
     ↑N ⊆ E → ↑N' ⊆ E →
-    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat ⟦⟧ᶜ] f [ #l'] @ E
+    (∀ l', [[{ inv_tok N (Φx l') }]][inv_wsat] f [ #l'] @ E
       [[{ v, RET v; True }]]) -∗
-    [[{ pred_step2 c mn ∗ ilist N N' Φx l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ pred_step2 c mn ∗ ilist N N' Φx l }]][inv_wsat]
       iterst_ilist [f; step2; #c; #l] @ E [[{ RET #☠; c ↦ #0 ∗ (c +ₗ 1) ↦ #0 }]].
   Proof.
     iIntros (??) "#i".
@@ -306,7 +306,7 @@ Section ilist.
   Definition add3 : val := λ: ["l"], "l" <-ˢᶜ !ˢᶜ "l" + #3.
   (** [add3] preserves the invariant of [cif_mul3] *)
   Lemma twp_add3_mul3 {N E l} : ↑N ⊆ E →
-    [[{ inv_tok N (cif_mul3 l) }]][inv_wsat ⟦⟧ᶜ] add3 [ #l] @ E
+    [[{ inv_tok N (cif_mul3 l) }]][inv_wsat] add3 [ #l] @ E
     [[{ v, RET v; True }]].
   Proof.
     iIntros (??) "#i →Φ". wp_rec. wp_bind (!ˢᶜ _)%E.
@@ -318,7 +318,7 @@ Section ilist.
   Qed.
   (** On [iter_ilist] *)
   Lemma twp_iter_ilist_add3_mul3 {N N' E c l} {n : nat} : ↑N ⊆ E → ↑N' ⊆ E →
-    [[{ c ↦ #n ∗ ilist N N' cif_mul3 l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ c ↦ #n ∗ ilist N N' cif_mul3 l }]][inv_wsat]
       iter_ilist [add3; #c; #l] @ E
     [[{ RET #☠; c ↦ #0 }]].
   Proof.
@@ -327,7 +327,7 @@ Section ilist.
   Qed.
   Lemma twp_fork2_iter_ilist_add3_mul3 {N N' E c' c l} {m n : nat} :
     ↑N ⊆ E → ↑N' ⊆ E →
-    [[{ c' ↦ #m ∗ c ↦ #n ∗ ilist N N' cif_mul3 l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ c' ↦ #m ∗ c ↦ #n ∗ ilist N N' cif_mul3 l }]][inv_wsat]
       fork2_iter_ilist [add3; #c'; #c; #l] @ E [[{ RET #☠; c ↦ #0 }]].
   Proof.
     move=> ??. iApply (twp_fork2_iter_ilist with "[]")=>//. iIntros (??).
@@ -335,14 +335,14 @@ Section ilist.
   Qed.
   Lemma twp_forks_iter_ilist_add3_mul3 {N N' E k l} {n : nat} :
     ↑N ⊆ E → ↑N' ⊆ E →
-    [[{ k ↦ #n ∗ ilist N N' cif_mul3 l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ k ↦ #n ∗ ilist N N' cif_mul3 l }]][inv_wsat]
       forks_iter_ilist [add3; #k; #l] @ E [[{ RET #☠; k ↦ #0 }]].
   Proof.
     move=> ??. iApply (twp_forks_iter_ilist with "[]")=>//. iIntros (??).
     by iApply twp_add3_mul3.
   Qed.
   Lemma twp_nd_forks_iter_ilist_add3_mul3 {N N' E l} : ↑N ⊆ E → ↑N' ⊆ E →
-    [[{ ilist N N' cif_mul3 l }]][inv_wsat ⟦⟧ᶜ]
+    [[{ ilist N N' cif_mul3 l }]][inv_wsat]
       nd_forks_iter_ilist [add3; #l] @ E [[{ RET #☠; True }]].
   Proof.
     move=> ??. iApply (twp_nd_forks_iter_ilist with "[]")=>//. iIntros (??).

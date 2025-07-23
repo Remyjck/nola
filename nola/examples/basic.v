@@ -51,12 +51,12 @@ Section basic.
     wp_apply (twp_decr_loop with "↦ →Φ").
   Qed.
 
-  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ), !inv'GS (cifOF CON) Σ,
+  Context `{!Csem CON JUDG Σ, !Jsem JUDG (iProp Σ), !inv'GS Σ,
     !inv_tokC CON, !inv_tokCS CON JUDG Σ}.
 
   (** [just_loop] called with a value taken from an invariant *)
   Lemma twp_just_loop_inv {N E l} : ↑N ⊆ E →
-    [[{ inv_tok N (∃ n : nat, ▷ l ↦ #n)%cif }]][inv_wsat ⟦⟧ᶜ]
+    [[{ @inv_tok _ _ CON JUDG _ _ N (∃ n : nat, ▷ l ↦ #n)%cif }]][inv_wsat]
       just_loop [!ˢᶜ #l] @ E [[{ RET #☠; True }]].
   Proof.
     iIntros (??) "#i →Φ". wp_bind (!ˢᶜ _)%E.
@@ -66,7 +66,7 @@ Section basic.
 
   (** [decr_loop] called with a value taken from an invariant *)
   Lemma twp_decr_loop_inv {N E l l' v} : ↑N ⊆ E →
-    [[{ inv_tok N (∃ n : nat, ▷ l' ↦ #n)%cif ∗ l ↦ v }]][inv_wsat ⟦⟧ᶜ]
+    [[{ @inv_tok _ _ CON JUDG _ _ N (∃ n : nat, ▷ l' ↦ #n)%cif ∗ l ↦ v }]][inv_wsat]
       #l <- !ˢᶜ #l';; decr_loop [ #l] @ E [[{ RET #☠; l ↦ #0 }]].
   Proof.
     iIntros (??) "[#i ↦] →Φ". wp_bind (!ˢᶜ _)%E.

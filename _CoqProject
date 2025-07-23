@@ -39,17 +39,11 @@ nola/iris/agree.v
 nola/iris/csum.v
 nola/iris/sinv.v
 nola/iris/inv.v
-nola/iris/inv_deriv.v
-nola/iris/na_inv.v
-nola/iris/na_inv_deriv.v
 nola/iris/dinv.v
-nola/iris/dinv_deriv.v
 nola/iris/store.v
-nola/iris/store_deriv.v
 nola/iris/lft.v
 nola/iris/borrow.v
 nola/iris/borrow_deriv.v
-nola/iris/fborrow.v
 nola/iris/proph.v
 nola/iris/proph_ag.v
 nola/iris/pborrow.v
